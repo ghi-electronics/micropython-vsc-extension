@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "micropython",
+            "request": "launch",
+            "name": "Deploy and Debug (MicroPython, USB)",
+            "program": "${workspaceFolder}/main.py",
+            "sync": true,
+            "device": "",
+            "stopOnEntry": false
+        }
+    ]
+}
