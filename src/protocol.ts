@@ -33,6 +33,7 @@ export const enum Cmd {
     ThreadStack = 0x00020011,
     ValueGetScope = 0x00020030,
     ValueEvaluate = 0x00020031,
+    ValueGetChildren = 0x00020032,
 
     FilePut = 0x00030000,
     FileCrc = 0x00030001,

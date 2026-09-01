@@ -38,6 +38,13 @@ export interface StackFrameInfo {
     func: string;
 }
 
+export interface DeviceVariable {
+    name: string;
+    value: string;
+    /** Non-zero if expandable. Valid only while the device stays halted. */
+    handle: number;
+}
+
 export interface DeviceCapabilities {
     protocol: number;
     maxBreakpoints: number;
@@ -317,24 +324,41 @@ export class DeviceLink extends EventEmitter {
         return 0;
     }
 
-    /** Variables in a scope of a frame. Only globals are populated today. */
-    async variables(frame: number, scope: Scope): Promise<{ name: string; value: string }[]> {
-        const p = Buffer.alloc(8);
-        p.writeUInt32LE(frame, 0);
-        p.writeUInt32LE(scope, 4);
-        const r = await this.request(Cmd.ValueGetScope, p);
-        const b = r.payload;
+    /**
+     * Decode a variable list. Scopes and container children use the same
+     * encoding, so one decoder serves both.
+     *
+     * `handle` is non-zero for something worth expanding; it is the device's
+     * variablesReference and is only valid until execution resumes.
+     */
+    private decodeVars(b: Buffer): DeviceVariable[] {
         const count = b.readUInt16LE(0);
         let off = 2;
-        const out: { name: string; value: string }[] = [];
+        const out: DeviceVariable[] = [];
         for (let i = 0; i < count; i++) {
             const nl = b.readUInt16LE(off); off += 2;
             const name = b.subarray(off, off + nl).toString("utf8"); off += nl;
             const vl = b.readUInt16LE(off); off += 2;
             const value = b.subarray(off, off + vl).toString("utf8"); off += vl;
-            out.push({ name, value });
+            const handle = b.readUInt32LE(off); off += 4;
+            out.push({ name, value, handle });
         }
         return out;
+    }
+
+    /** Variables in a scope of a frame. Only globals are populated today. */
+    async variables(frame: number, scope: Scope): Promise<DeviceVariable[]> {
+        const p = Buffer.alloc(8);
+        p.writeUInt32LE(frame, 0);
+        p.writeUInt32LE(scope, 4);
+        return this.decodeVars((await this.request(Cmd.ValueGetScope, p)).payload);
+    }
+
+    /** Children of a container, by the handle it was listed with. */
+    async children(handle: number): Promise<DeviceVariable[]> {
+        const p = Buffer.alloc(4);
+        p.writeUInt32LE(handle, 0);
+        return this.decodeVars((await this.request(Cmd.ValueGetChildren, p)).payload);
     }
 
     /**

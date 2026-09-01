@@ -13,7 +13,7 @@ import {
 import { DebugProtocol } from "@vscode/debugprotocol";
 import * as path from "path";
 import * as fs from "fs";
-import { DeviceLink, findPorts, StackFrameInfo, DeviceCapabilities } from "./deviceLink";
+import { DeviceLink, findPorts, StackFrameInfo, DeviceCapabilities, DeviceVariable } from "./deviceLink";
 import { Cond, RebootFlag, StepMode, StopReason, STOP_REASON_TO_DAP, Scope as DevScope } from "./protocol";
 import { crc32 } from "./wireProtocol";
 
@@ -28,6 +28,8 @@ interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
 const THREAD_ID = 1;
 
 /** variablesReference must be non-zero; frame index is encoded above this. */
+// Scope references start above the device's handle range (handles are small
+// integers from 1), so the two never collide in variablesReference.
 const VARREF_GLOBALS_BASE = 1000;
 
 export class MicroPythonDebugSession extends DebugSession {
@@ -347,10 +349,16 @@ export class MicroPythonDebugSession extends DebugSession {
         response: DebugProtocol.VariablesResponse,
         args: DebugProtocol.VariablesArguments,
     ): Promise<void> {
-        const frame = args.variablesReference - VARREF_GLOBALS_BASE;
-        let vars: { name: string; value: string }[] = [];
+        let vars: DeviceVariable[] = [];
         try {
-            vars = await this.link.variables(frame, DevScope.Globals);
+            if (args.variablesReference >= VARREF_GLOBALS_BASE) {
+                // A scope: the reference encodes which frame's globals to read.
+                vars = await this.link.variables(
+                    args.variablesReference - VARREF_GLOBALS_BASE, DevScope.Globals);
+            } else {
+                // A container: the reference is the device's own object handle.
+                vars = await this.link.children(args.variablesReference);
+            }
         } catch (e) {
             this.log(`variables: ${(e as Error).message}`);
         }
@@ -358,7 +366,9 @@ export class MicroPythonDebugSession extends DebugSession {
             variables: vars.map((v) => ({
                 name: v.name,
                 value: v.value,
-                variablesReference: 0,          // no expansion yet
+                // The device hands back 0 for anything it will not expand, which
+                // is exactly what DAP wants for a leaf.
+                variablesReference: v.handle,
             })),
         };
         this.sendResponse(response);
