@@ -51,9 +51,8 @@ export class MicroPythonDebugSession extends DebugSession {
         response.body = response.body || {};
         response.body.supportsConfigurationDoneRequest = true;
         response.body.supportsTerminateRequest = true;
-        // Deliberately not advertised until milestone 6: claiming these and
-        // returning nothing produces a worse experience than not claiming them.
-        response.body.supportsEvaluateForHovers = false;
+        response.body.supportsEvaluateForHovers = true;
+        // Assignment would need a device-side setter; evaluation is read-only.
         response.body.supportsSetVariable = false;
         this.sendResponse(response);
     }
@@ -279,6 +278,26 @@ export class MicroPythonDebugSession extends DebugSession {
                 variablesReference: 0,          // no expansion yet
             })),
         };
+        this.sendResponse(response);
+    }
+
+    protected async evaluateRequest(
+        response: DebugProtocol.EvaluateResponse,
+        args: DebugProtocol.EvaluateArguments,
+    ): Promise<void> {
+        // Serves Watch, hover, and the Debug Console prompt.
+        const frame = args.frameId ?? 0;
+        try {
+            const r = await this.link.evaluate(frame, args.expression);
+            response.body = { result: r.value, variablesReference: 0 };
+            if (!r.ok) {
+                // A failed evaluation still returns text (the exception repr),
+                // which is what the user needs to see.
+                response.success = true;
+            }
+        } catch (e) {
+            response.body = { result: (e as Error).message, variablesReference: 0 };
+        }
         this.sendResponse(response);
     }
 

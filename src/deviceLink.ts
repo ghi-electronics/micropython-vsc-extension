@@ -315,6 +315,23 @@ export class DeviceLink extends EventEmitter {
         return out;
     }
 
+    /**
+     * Evaluate an expression in a frame's context. Returns the repr, or the
+     * exception's repr with ok=false -- "NameError: ..." is more useful to
+     * show than a generic failure.
+     */
+    async evaluate(frame: number, expr: string): Promise<{ ok: boolean; value: string }> {
+        const e = Buffer.from(expr, "utf8");
+        const p = Buffer.alloc(6 + e.length);
+        p.writeUInt32LE(frame, 0);
+        p.writeUInt16LE(e.length, 4);
+        e.copy(p, 6);
+        const r = await this.request(Cmd.ValueEvaluate, p);
+        const rc = r.payload.readInt32LE(0);
+        const len = r.payload.readUInt16LE(4);
+        return { ok: rc === 0, value: r.payload.subarray(6, 6 + len).toString("utf8") };
+    }
+
     /** Remove a file from the device. Returns 0 on success. */
     async deleteFile(name: string): Promise<number> {
         const nameBuf = Buffer.from(name, "utf8");
