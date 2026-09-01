@@ -31,7 +31,7 @@ async function main() {
 
     // Reboot WITHOUT wait-for-debugger: the program runs immediately and the
     // host is not attached, which is the case that used to go dark.
-    link.reboot(0);
+    await link.reboot(0);
     await link.close();
     await sleep(1500);
     link = await connect();
@@ -70,7 +70,7 @@ async function main() {
     console.log("\nRESULT:", ok ? "PASS - reachable while spinning" : "FAIL - went dark");
     // leave the board idle rather than spinning
     await link.deleteFile("main.py");
-    link.reboot(0);
+    await link.reboot(0);
     await link.close();
     process.exit(ok ? 0 : 1);
 }

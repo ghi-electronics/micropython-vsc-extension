@@ -34,11 +34,13 @@ export const enum Cmd {
     ValueGetScope = 0x00020030,
     ValueEvaluate = 0x00020031,
     ValueGetChildren = 0x00020032,
+    ValueSetVariable = 0x00020033,
 
     FilePut = 0x00030000,
     FileCrc = 0x00030001,
     FileDelete = 0x00030002,
     FileMkdir = 0x00030003,
+    FileList = 0x00030004,
 }
 
 /** Debugger state bits, as understood by Execution_ChangeConditions. */

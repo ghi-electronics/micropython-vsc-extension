@@ -208,14 +208,37 @@ export class DeviceLink extends EventEmitter {
         });
     }
 
-    /** Fire and forget -- used where a reply cannot arrive (the device is resetting). */
-    send(cmd: number, payload = Buffer.alloc(0)): void {
-        const seq = this.seq++ & 0xffff;
-        try {
-            this.port?.write(build(cmd, FLAG_NON_CRITICAL, payload, seq));
-        } catch {
-            // Used for the reboot command, where the link is expected to drop.
-        }
+    /**
+     * Send without expecting a reply, resolving only once the bytes have
+     * actually left the host.
+     *
+     * This must not be fire-and-forget. The one command that uses it is the
+     * reboot, and the caller closes the port immediately afterwards: an
+     * unflushed write is simply discarded, the device never resets, and the
+     * session silently attaches to the still-running program instead. That
+     * looks like "deploy did nothing" from the outside.
+     */
+    sendAndFlush(cmd: number, payload = Buffer.alloc(0)): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const seq = this.seq++ & 0xffff;
+            const frame = build(cmd, FLAG_NON_CRITICAL, payload, seq);
+            if (!this.port?.isOpen) {
+                resolve();
+                return;
+            }
+            try {
+                this.port.write(frame, () => {
+                    // write() only queues; drain() waits for the OS to take it.
+                    try {
+                        this.port.drain(() => resolve());
+                    } catch {
+                        resolve();
+                    }
+                });
+            } catch {
+                resolve();
+            }
+        });
     }
 
     // ---------------------------------------------------------------- commands
@@ -318,10 +341,13 @@ export class DeviceLink extends EventEmitter {
      * caller must reconnect. The device detaches USB first so the host sees a
      * real disconnect.
      */
-    reboot(flags: RebootFlag): void {
+    async reboot(flags: RebootFlag): Promise<void> {
         const p = Buffer.alloc(4);
         p.writeUInt32LE(flags >>> 0, 0);
-        this.send(Cmd.MonitorReboot, p);
+        await this.sendAndFlush(Cmd.MonitorReboot, p);
+        // The device acknowledges, waits ~50 ms, detaches USB and resets. Give
+        // it that window before the port is closed under it.
+        await new Promise((r) => setTimeout(r, 250));
     }
 
     /** Push a file, chunked to fit MAX_PAYLOAD. Returns 0 on success. */
@@ -434,6 +460,55 @@ export class DeviceLink extends EventEmitter {
         const rc = r.payload.readInt32LE(0);
         const len = r.payload.readUInt16LE(4);
         return { ok: rc === 0, value: r.payload.subarray(6, 6 + len).toString("utf8") };
+    }
+
+    /**
+     * Assign to a global in a frame's context. Returns the value the device
+     * holds afterwards, read back rather than echoed.
+     */
+    async setVariable(frame: number, name: string, expr: string):
+        Promise<{ ok: boolean; value: string }> {
+        const n = Buffer.from(name, "utf8");
+        const e = Buffer.from(expr, "utf8");
+        const p = Buffer.alloc(8 + n.length + e.length);
+        p.writeUInt32LE(frame, 0);
+        p.writeUInt16LE(n.length, 4);
+        n.copy(p, 6);
+        p.writeUInt16LE(e.length, 6 + n.length);
+        e.copy(p, 8 + n.length);
+        const r = await this.request(Cmd.ValueSetVariable, p);
+        const rc = r.payload.readInt32LE(0);
+        const len = r.payload.readUInt16LE(4);
+        return { ok: rc === 0, value: r.payload.subarray(6, 6 + len).toString("utf8") };
+    }
+
+    /** One directory's entries. Paginated like the variable commands. */
+    async list(dir: string): Promise<{ name: string; isDir: boolean }[]> {
+        const out: { name: string; isDir: boolean }[] = [];
+        for (let page = 0; page < 64; page++) {
+            const nb = Buffer.from(dir, "utf8");
+            const p = Buffer.alloc(2 + nb.length + 4);
+            p.writeUInt16LE(nb.length, 0);
+            nb.copy(p, 2);
+            p.writeUInt32LE(out.length, 2 + nb.length);
+            const b = (await this.request(Cmd.FileList, p, 10000)).payload;
+            if (b.length < 4) {
+                break;
+            }
+            const count = b.readUInt16LE(0);
+            const more = b.readUInt16LE(2) !== 0;
+            let off = 4;
+            for (let i = 0; i < count; i++) {
+                const nl = b.readUInt16LE(off); off += 2;
+                const name = b.subarray(off, off + nl).toString("utf8"); off += nl;
+                const isDir = b[off] !== 0; off += 1;
+                out.push({ name, isDir });
+            }
+            if (!more || count === 0) {
+                break;
+            }
+        }
+        return out;
     }
 
     /** Remove a file from the device. Returns 0 on success. */

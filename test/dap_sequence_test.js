@@ -35,7 +35,7 @@ async function main() {
 
     console.log("1. sync + reboot into halt");
     await link.putFile("main.py", MAIN_PY);
-    link.reboot(1 /* WaitForDebugger */);
+    await link.reboot(1 /* WaitForDebugger */);
     await link.close();
     await sleep(1200);
     link = await connect();

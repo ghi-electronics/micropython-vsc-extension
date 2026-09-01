@@ -50,7 +50,7 @@ async function runCase(label, body) {
 
     try {
         await link.putFile("main.py", Buffer.from(src, "utf8"));
-        link.reboot(1);
+        await link.reboot(1);
         await link.close();
         await sleep(1200);
         link = await connect();

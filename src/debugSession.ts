@@ -56,8 +56,7 @@ export class MicroPythonDebugSession extends DebugSession {
         response.body.supportsConfigurationDoneRequest = true;
         response.body.supportsTerminateRequest = true;
         response.body.supportsEvaluateForHovers = true;
-        // Assignment would need a device-side setter; evaluation is read-only.
-        response.body.supportsSetVariable = false;
+        response.body.supportsSetVariable = true;
         this.sendResponse(response);
     }
 
@@ -95,14 +94,27 @@ export class MicroPythonDebugSession extends DebugSession {
             await this.link.open(devicePort);
             this.attachEvents();
 
+            // Start from a known state. A session that ended abruptly -- VS Code
+            // killed, cable pulled -- can leave the board halted with stale
+            // breakpoints still set, and the next launch then behaves oddly for
+            // reasons that have nothing to do with this run.
+            try {
+                await this.link.setBreakpoints([]);
+                await this.link.conditions(0, Cond.Stopped | Cond.Attached);
+            } catch {
+                // A device that will not answer here will fail more clearly in
+                // a moment; do not mask that with an error from the cleanup.
+            }
+
             if (args.sync !== false) {
                 await this.syncWorkspace();
             }
 
             // Reboot into a halt so breakpoints can be set before anything runs.
+            this.log("extension 0.1.0 (built 2026-09-01 14:12)");
             this.log(`project ${this.programDir}, entry ${this.entryName}`);
             this.log("Restarting device...");
-            this.link.reboot(RebootFlag.WaitForDebugger);
+            await this.link.reboot(RebootFlag.WaitForDebugger);
             await this.link.close();
             await delay(1200);
             await this.reconnect(args.device);
@@ -175,9 +187,11 @@ export class MicroPythonDebugSession extends DebugSession {
     private async syncWorkspace(): Promise<void> {
         const files = this.collectSources(this.programDir);
         const madeDirs = new Set<string>();
+        const deployed = new Set<string>();
 
         for (const local of files) {
             const target = this.toDevicePath(local);
+            deployed.add(target);
             const data = fs.readFileSync(local);
 
             const info = await this.link.fileCrc(target);
@@ -201,6 +215,43 @@ export class MicroPythonDebugSession extends DebugSession {
             this.log(rc === 0 ? `pushed     ${target} (${data.length} bytes)`
                 : `FAILED     ${target} (${rc})`);
         }
+
+        await this.removeStale(deployed);
+    }
+
+    /**
+     * Remove .py files the workspace no longer has.
+     *
+     * Without this, deleting a module locally leaves it on the device where
+     * `import` still finds it -- code that appears to work because of a file
+     * you believe is gone, which is a miserable thing to debug.
+     *
+     * Only .py files are removed, and never boot.py. Anything else on the
+     * filesystem is the user's: data files, logs, configuration. A deploy has
+     * no business deleting those, which is why this reconciles rather than
+     * wiping the filesystem and starting clean.
+     */
+    private async removeStale(keep: Set<string>): Promise<void> {
+        const walk = async (dir: string): Promise<void> => {
+            let entries: { name: string; isDir: boolean }[];
+            try {
+                entries = await this.link.list(dir === "" ? "/" : dir);
+            } catch {
+                return;
+            }
+            for (const e of entries) {
+                const full = dir === "" ? e.name : `${dir}/${e.name}`;
+                if (e.isDir) {
+                    await walk(full);
+                } else if (full.endsWith(".py") && full !== "boot.py"
+                    && !keep.has(full)) {
+                    const rc = await this.link.deleteFile(full);
+                    this.log(rc === 0 ? `removed    ${full}`
+                        : `remove failed ${full} (${rc})`);
+                }
+            }
+        };
+        await walk("");
     }
 
     private async reconnect(preferred?: string): Promise<void> {
@@ -396,6 +447,32 @@ export class MicroPythonDebugSession extends DebugSession {
         this.sendResponse(response);
     }
 
+    protected async setVariableRequest(
+        response: DebugProtocol.SetVariableResponse,
+        args: DebugProtocol.SetVariableArguments,
+    ): Promise<void> {
+        // Only globals can be set. Container elements would need the parent
+        // expression to build an assignment target, and locals have no name to
+        // bind to at all -- the same limit the panel has.
+        if (args.variablesReference < VARREF_GLOBALS_BASE) {
+            this.sendErrorResponse(response, 2001,
+                "Only global variables can be changed.");
+            return;
+        }
+        const frame = args.variablesReference - VARREF_GLOBALS_BASE;
+        try {
+            const r = await this.link.setVariable(frame, args.name, args.value);
+            if (!r.ok) {
+                this.sendErrorResponse(response, 2002, r.value);
+                return;
+            }
+            response.body = { value: r.value, variablesReference: 0 };
+            this.sendResponse(response);
+        } catch (e) {
+            this.sendErrorResponse(response, 2003, (e as Error).message);
+        }
+    }
+
     protected async continueRequest(
         response: DebugProtocol.ContinueResponse,
     ): Promise<void> {
@@ -423,13 +500,36 @@ export class MicroPythonDebugSession extends DebugSession {
         this.sendResponse(response);
     }
 
-    protected async disconnectRequest(
-        response: DebugProtocol.DisconnectResponse,
+    protected async terminateRequest(
+        response: DebugProtocol.TerminateResponse,
     ): Promise<void> {
+        // VS Code's stop button sends terminate first and only falls back to
+        // disconnect if the session does not end. Advertising the capability
+        // without implementing it meant the first click did nothing and users
+        // had to press stop twice.
+        //
+        // Terminate here means "stop debugging, leave the board running": the
+        // program keeps going standalone, which is what an embedded target
+        // should do when the debugger goes away.
+        await this.detach();
+        this.sendResponse(response);
+        this.sendEvent(new TerminatedEvent());
+    }
+
+    /** Release the device: no breakpoints, not halted, not attached. */
+    private async detach(): Promise<void> {
         try {
             await this.link.setBreakpoints([]);
             await this.link.conditions(0, Cond.Stopped | Cond.Attached);
-        } catch { /* the device may already be gone */ }
+        } catch {
+            // The device may already be gone; disconnecting must still succeed.
+        }
+    }
+
+    protected async disconnectRequest(
+        response: DebugProtocol.DisconnectResponse,
+    ): Promise<void> {
+        await this.detach();
         await this.link.close();
         this.sendResponse(response);
     }

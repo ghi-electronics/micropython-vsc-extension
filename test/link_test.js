@@ -92,7 +92,7 @@ async function main() {
     results.file = rc === 0 && info.size === data.length && info.crc === crc32(data);
 
     console.log("\n3. reboot into halt (USB re-enumerates, reconnecting)");
-    link.reboot(Reboot.WaitForDebugger);
+    await link.reboot(Reboot.WaitForDebugger);
     await link.close();
     await sleep(1200);
     link = await connect();

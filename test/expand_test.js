@@ -45,7 +45,7 @@ async function main() {
     let link = await connect();
     if (!link) { console.log("no device"); process.exit(1); }
     await link.putFile("main.py", Buffer.from(SRC, "utf8"));
-    link.reboot(1);
+    await link.reboot(1);
     await link.close(); await sleep(1200);
     link = await connect();
     if (!link) { console.log("gone"); process.exit(1); }

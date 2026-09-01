@@ -29,6 +29,7 @@ nested = [[1, 2], {"a": 1}]
 def sample(n):
     total = n + 1
     readings.append(total)
+    print("=> n = ", n)       
     return total
 
 

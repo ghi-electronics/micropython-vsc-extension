@@ -49,7 +49,7 @@ async function main() {
 
     // Restart WITHOUT wait-for-debugger, so it boots straight to the REPL.
     console.log("restarting...");
-    link.reboot(0);
+    await link.reboot(0);
     await link.close();
     await sleep(1500);
 
