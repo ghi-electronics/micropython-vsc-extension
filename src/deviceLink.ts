@@ -6,8 +6,19 @@
  * signal. Everything above this layer speaks in commands, not bytes.
  */
 import { EventEmitter } from "events";
-import { SerialPort } from "serialport";
 import { Decoder, build, Message } from "./wireProtocol";
+
+// Loaded on first use, not at import time.  serialport is a native module; if
+// it ever fails to load, that must surface as a clear error from the command
+// that needed it rather than as a silent activation failure.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let serialportModule: any;
+function serialport(): any {
+    if (!serialportModule) {
+        serialportModule = require("serialport");
+    }
+    return serialportModule;
+}
 import {
     Cmd, Cond, FileFlag, RebootFlag, StepMode,
     FLAG_NON_CRITICAL, FLAG_REPLY, MAX_PAYLOAD,
@@ -40,7 +51,7 @@ export interface DevicePorts {
  * in `pnpId` differently, so both spellings are checked.
  */
 export async function findPorts(): Promise<DevicePorts> {
-    const ports = await SerialPort.list();
+    const ports = await serialport().SerialPort.list();
     const result: DevicePorts = {};
     for (const p of ports) {
         const vid = parseInt(p.vendorId ?? "", 16);
@@ -68,7 +79,7 @@ interface Pending {
 }
 
 export class DeviceLink extends EventEmitter {
-    private port?: SerialPort;
+    private port?: any;
     private decoder = new Decoder();
     private pending = new Map<number, Pending>();
     private seq = 1;
@@ -81,7 +92,9 @@ export class DeviceLink extends EventEmitter {
         await new Promise<void>((resolve, reject) => {
             // CDC ignores the baud rate -- this is USB, not a UART -- but the
             // API requires one.
-            const port = new SerialPort({ path, baudRate: 115200 }, (err) => {
+            const port = new (serialport().SerialPort)(
+                { path, baudRate: 115200 },
+                (err: Error | null | undefined) => {
                 if (err) {
                     reject(err);
                 } else {
@@ -146,7 +159,7 @@ export class DeviceLink extends EventEmitter {
                 reject(new Error(`device did not answer command 0x${cmd.toString(16)}`));
             }, timeoutMs);
             this.pending.set(seq, { resolve, reject, timer });
-            this.port!.write(frame, (err) => {
+            this.port!.write(frame, (err: Error | null | undefined) => {
                 if (err) {
                     clearTimeout(timer);
                     this.pending.delete(seq);

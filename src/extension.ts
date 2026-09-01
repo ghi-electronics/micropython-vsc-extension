@@ -10,7 +10,11 @@ import * as path from "path";
 import { MicroPythonDebugSession } from "./debugSession";
 import { findPorts } from "./deviceLink";
 
+const output = vscode.window.createOutputChannel("MicroPython SITCore");
+
 export function activate(context: vscode.ExtensionContext): void {
+    output.appendLine("MicroPython SITCore extension activated");
+    context.subscriptions.push(output);
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory(
             "micropython", new InlineAdapterFactory()),
