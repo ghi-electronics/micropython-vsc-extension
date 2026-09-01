@@ -50,6 +50,8 @@ export interface DeviceCapabilities {
     maxBreakpoints: number;
     maxPayload: number;
     maxValueLen: number;
+    /** Diagnostic: how many times the VM loop hook has run. */
+    vmHookCalls: number;
 }
 
 export interface DevicePorts {
@@ -94,9 +96,22 @@ interface Pending {
 
 export class DeviceLink extends EventEmitter {
     private port?: any;
+    /** Last transport error, for callers that want to report it. */
+    lastError?: Error;
     private decoder = new Decoder();
     private pending = new Map<number, Pending>();
     private seq = 1;
+
+    constructor() {
+        super();
+        // Node throws if an "error" event has no listener, so a serial error --
+        // which happens routinely when the device resets and the port vanishes
+        // under an open handle -- would take down the whole process, extension
+        // host included. Record it and let interested callers listen as well.
+        this.on("error", (e: Error) => {
+            this.lastError = e;
+        });
+    }
 
     get isOpen(): boolean {
         return this.port?.isOpen ?? false;
@@ -175,20 +190,32 @@ export class DeviceLink extends EventEmitter {
                 reject(new Error(`device did not answer command 0x${cmd.toString(16)}`));
             }, timeoutMs);
             this.pending.set(seq, { resolve, reject, timer });
-            this.port!.write(frame, (err: Error | null | undefined) => {
-                if (err) {
-                    clearTimeout(timer);
-                    this.pending.delete(seq);
-                    reject(err);
-                }
-            });
+            try {
+                this.port!.write(frame, (err: Error | null | undefined) => {
+                    if (err) {
+                        clearTimeout(timer);
+                        this.pending.delete(seq);
+                        reject(err);
+                    }
+                });
+            } catch (e) {
+                // The port can disappear between the isOpen check and the write
+                // when the device resets.
+                clearTimeout(timer);
+                this.pending.delete(seq);
+                reject(e as Error);
+            }
         });
     }
 
     /** Fire and forget -- used where a reply cannot arrive (the device is resetting). */
     send(cmd: number, payload = Buffer.alloc(0)): void {
         const seq = this.seq++ & 0xffff;
-        this.port?.write(build(cmd, FLAG_NON_CRITICAL, payload, seq));
+        try {
+            this.port?.write(build(cmd, FLAG_NON_CRITICAL, payload, seq));
+        } catch {
+            // Used for the reboot command, where the link is expected to drop.
+        }
     }
 
     // ---------------------------------------------------------------- commands
@@ -257,6 +284,7 @@ export class DeviceLink extends EventEmitter {
             maxBreakpoints: r.payload.readUInt16LE(2),
             maxPayload: r.payload.readUInt16LE(4),
             maxValueLen: r.payload.readUInt16LE(6),
+            vmHookCalls: r.payload.length >= 12 ? r.payload.readUInt32LE(8) : 0,
         };
     }
 
@@ -325,40 +353,70 @@ export class DeviceLink extends EventEmitter {
     }
 
     /**
-     * Decode a variable list. Scopes and container children use the same
-     * encoding, so one decoder serves both.
+     * Decode a paginated variable reply:
+     *   uint16 count, uint16 more, then count entries.
      *
-     * `handle` is non-zero for something worth expanding; it is the device's
-     * variablesReference and is only valid until execution resumes.
+     * Scopes and container children share this encoding, so one decoder
+     * serves both. `handle` is non-zero for something worth expanding; it is
+     * the device's variablesReference and is valid only until execution
+     * resumes.
      */
-    private decodeVars(b: Buffer): DeviceVariable[] {
+    private decodeVars(b: Buffer): { vars: DeviceVariable[]; more: boolean } {
         const count = b.readUInt16LE(0);
-        let off = 2;
-        const out: DeviceVariable[] = [];
+        const more = b.readUInt16LE(2) !== 0;
+        let off = 4;
+        const vars: DeviceVariable[] = [];
         for (let i = 0; i < count; i++) {
             const nl = b.readUInt16LE(off); off += 2;
             const name = b.subarray(off, off + nl).toString("utf8"); off += nl;
             const vl = b.readUInt16LE(off); off += 2;
             const value = b.subarray(off, off + vl).toString("utf8"); off += vl;
             const handle = b.readUInt32LE(off); off += 4;
-            out.push({ name, value, handle });
+            vars.push({ name, value, handle });
+        }
+        return { vars, more };
+    }
+
+    /**
+     * Keep asking until the device says there is nothing more.
+     *
+     * A reply has to fit one packet, so a module with many globals or one long
+     * value arrives in pieces. Bounded so a device that always claims "more"
+     * cannot spin here forever.
+     */
+    private async paged(
+        fetch: (start: number) => Promise<Buffer>,
+    ): Promise<DeviceVariable[]> {
+        const out: DeviceVariable[] = [];
+        for (let page = 0; page < 64; page++) {
+            const { vars, more } = this.decodeVars(await fetch(out.length));
+            out.push(...vars);
+            if (!more || vars.length === 0) {
+                break;
+            }
         }
         return out;
     }
 
     /** Variables in a scope of a frame. Only globals are populated today. */
-    async variables(frame: number, scope: Scope): Promise<DeviceVariable[]> {
-        const p = Buffer.alloc(8);
-        p.writeUInt32LE(frame, 0);
-        p.writeUInt32LE(scope, 4);
-        return this.decodeVars((await this.request(Cmd.ValueGetScope, p)).payload);
+    variables(frame: number, scope: Scope): Promise<DeviceVariable[]> {
+        return this.paged(async (start) => {
+            const p = Buffer.alloc(12);
+            p.writeUInt32LE(frame, 0);
+            p.writeUInt32LE(scope, 4);
+            p.writeUInt32LE(start, 8);
+            return (await this.request(Cmd.ValueGetScope, p)).payload;
+        });
     }
 
-    /** Children of a container, by the handle it was listed with. */
-    async children(handle: number): Promise<DeviceVariable[]> {
-        const p = Buffer.alloc(4);
-        p.writeUInt32LE(handle, 0);
-        return this.decodeVars((await this.request(Cmd.ValueGetChildren, p)).payload);
+    /** Children of a container, addressed by the handle it was listed with. */
+    children(handle: number): Promise<DeviceVariable[]> {
+        return this.paged(async (start) => {
+            const p = Buffer.alloc(8);
+            p.writeUInt32LE(handle, 0);
+            p.writeUInt32LE(start, 4);
+            return (await this.request(Cmd.ValueGetChildren, p)).payload;
+        });
     }
 
     /**

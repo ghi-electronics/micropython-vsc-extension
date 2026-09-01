@@ -222,6 +222,8 @@ export class MicroPythonDebugSession extends DebugSession {
 
     private attachEvents(): void {
         this.link.removeAllListeners("stopped");
+        this.link.removeAllListeners("error");
+        this.link.on("error", (e: Error) => this.log(`device link: ${e.message}`));
         this.link.removeAllListeners("output");
         // Program output arrives as its own event. "stdout" categorises it as
         // the program's, distinct from the adapter's own "console" messages.
