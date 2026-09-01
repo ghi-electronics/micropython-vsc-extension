@@ -1,0 +1,114 @@
+{
+  "name": "micropython-sitcore-debug",
+  "displayName": "MicroPython for SITCore",
+  "description": "Source-level MicroPython debugging over USB for GHI Electronics SITCore devices.",
+  "publisher": "ghi-electronics",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ghi-electronics/micropython-vsc-extension.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onDebugResolve:micropython"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "micropython-sitcore.selectDevice",
+        "title": "MicroPython: Select Device"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "python"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "micropython",
+        "label": "MicroPython (SITCore, USB)",
+        "languages": [
+          "python"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Entry script to run on the device.",
+                "default": "${workspaceFolder}/main.py"
+              },
+              "sync": {
+                "type": "boolean",
+                "description": "Push changed workspace .py files to the device before running.",
+                "default": true
+              },
+              "device": {
+                "type": "string",
+                "description": "Serial port of the debug channel (CDC1). Empty means auto-detect.",
+                "default": ""
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Halt before the first line of the program.",
+                "default": false
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "micropython",
+            "request": "launch",
+            "name": "Deploy and Debug (MicroPython, USB)",
+            "program": "${workspaceFolder}/main.py",
+            "sync": true,
+            "device": "",
+            "stopOnEntry": false
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "MicroPython: Deploy and Debug over USB",
+            "description": "Push the workspace to a SITCore device and debug it.",
+            "body": {
+              "type": "micropython",
+              "request": "launch",
+              "name": "Deploy and Debug (MicroPython, USB)",
+              "program": "^\"\\${workspaceFolder}/main.py\"",
+              "sync": true,
+              "device": "",
+              "stopOnEntry": false
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "@vscode/debugadapter": "^1.65.0",
+    "@vscode/debugprotocol": "^1.65.0",
+    "serialport": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}
