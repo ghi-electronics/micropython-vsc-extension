@@ -20,7 +20,7 @@ function serialport(): any {
     return serialportModule;
 }
 import {
-    Cmd, Cond, FileFlag, RebootFlag, StepMode,
+    Cmd, Cond, FileFlag, RebootFlag, StepMode, Scope,
     FLAG_NON_CRITICAL, FLAG_REPLY, MAX_PAYLOAD,
     USB_VID, USB_PID_CDC2, IFACE_REPL, IFACE_DEBUG,
 } from "./protocol";
@@ -293,6 +293,26 @@ export class DeviceLink extends EventEmitter {
             first = false;
         }
         return 0;
+    }
+
+    /** Variables in a scope of a frame. Only globals are populated today. */
+    async variables(frame: number, scope: Scope): Promise<{ name: string; value: string }[]> {
+        const p = Buffer.alloc(8);
+        p.writeUInt32LE(frame, 0);
+        p.writeUInt32LE(scope, 4);
+        const r = await this.request(Cmd.ValueGetScope, p);
+        const b = r.payload;
+        const count = b.readUInt16LE(0);
+        let off = 2;
+        const out: { name: string; value: string }[] = [];
+        for (let i = 0; i < count; i++) {
+            const nl = b.readUInt16LE(off); off += 2;
+            const name = b.subarray(off, off + nl).toString("utf8"); off += nl;
+            const vl = b.readUInt16LE(off); off += 2;
+            const value = b.subarray(off, off + vl).toString("utf8"); off += vl;
+            out.push({ name, value });
+        }
+        return out;
     }
 
     /** Remove a file from the device. Returns 0 on success. */

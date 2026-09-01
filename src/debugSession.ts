@@ -14,7 +14,7 @@ import { DebugProtocol } from "@vscode/debugprotocol";
 import * as path from "path";
 import * as fs from "fs";
 import { DeviceLink, findPorts, StackFrameInfo } from "./deviceLink";
-import { Cond, RebootFlag, StepMode, StopReason, STOP_REASON_TO_DAP } from "./protocol";
+import { Cond, RebootFlag, StepMode, StopReason, STOP_REASON_TO_DAP, Scope as DevScope } from "./protocol";
 import { crc32 } from "./wireProtocol";
 
 interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
@@ -26,6 +26,9 @@ interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
 
 /** The device is single-threaded; DAP still requires a thread id. */
 const THREAD_ID = 1;
+
+/** variablesReference must be non-zero; frame index is encoded above this. */
+const VARREF_GLOBALS_BASE = 1000;
 
 export class MicroPythonDebugSession extends DebugSession {
     private link = new DeviceLink();
@@ -241,10 +244,41 @@ export class MicroPythonDebugSession extends DebugSession {
         return new Source(deviceFile, fs.existsSync(local) ? local : undefined);
     }
 
-    protected scopesRequest(response: DebugProtocol.ScopesResponse): void {
-        // Variables are milestone 6. An empty scope list is honest: VS Code
-        // shows nothing rather than showing something wrong.
-        response.body = { scopes: [] as Scope[] };
+    protected scopesRequest(
+        response: DebugProtocol.ScopesResponse,
+        args: DebugProtocol.ScopesArguments,
+    ): void {
+        // Only globals. Local variable names are not recoverable in upstream
+        // MicroPython -- the bytecode prelude has no slot-to-identifier map --
+        // so a Locals scope would list values with no names, which is worse
+        // than not offering it. See micropython_debugger.md 2.2 and 9.2.
+        //
+        // The reference encodes the frame index, so a scope request against an
+        // outer frame reads that frame's module globals.
+        response.body = {
+            scopes: [new Scope("Globals", VARREF_GLOBALS_BASE + args.frameId, true)],
+        };
+        this.sendResponse(response);
+    }
+
+    protected async variablesRequest(
+        response: DebugProtocol.VariablesResponse,
+        args: DebugProtocol.VariablesArguments,
+    ): Promise<void> {
+        const frame = args.variablesReference - VARREF_GLOBALS_BASE;
+        let vars: { name: string; value: string }[] = [];
+        try {
+            vars = await this.link.variables(frame, DevScope.Globals);
+        } catch (e) {
+            this.log(`variables: ${(e as Error).message}`);
+        }
+        response.body = {
+            variables: vars.map((v) => ({
+                name: v.name,
+                value: v.value,
+                variablesReference: 0,          // no expansion yet
+            })),
+        };
         this.sendResponse(response);
     }
 

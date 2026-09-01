@@ -30,6 +30,7 @@ export const enum Cmd {
 
     ThreadList = 0x00020010,
     ThreadStack = 0x00020011,
+    ValueGetScope = 0x00020030,
 
     FilePut = 0x00030000,
     FileCrc = 0x00030001,
@@ -66,6 +67,11 @@ export const STOP_REASON_TO_DAP: Record<number, string> = {
     [StopReason.Exception]: "exception",
     [StopReason.Entry]: "entry",
 };
+
+export const enum Scope {
+    Locals = 0,
+    Globals = 1,
+}
 
 export const enum StepMode {
     None = 0,
