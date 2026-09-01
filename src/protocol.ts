@@ -36,6 +36,7 @@ export const enum Cmd {
     FilePut = 0x00030000,
     FileCrc = 0x00030001,
     FileDelete = 0x00030002,
+    FileMkdir = 0x00030003,
 }
 
 /** Debugger state bits, as understood by Execution_ChangeConditions. */

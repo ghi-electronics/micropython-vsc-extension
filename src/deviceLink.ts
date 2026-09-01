@@ -342,6 +342,16 @@ export class DeviceLink extends EventEmitter {
         return r.payload.readInt32LE(0);
     }
 
+    /** Create a directory. Succeeds if it already exists. */
+    async mkdir(name: string): Promise<number> {
+        const nameBuf = Buffer.from(name, "utf8");
+        const p = Buffer.alloc(2 + nameBuf.length);
+        p.writeUInt16LE(nameBuf.length, 0);
+        nameBuf.copy(p, 2);
+        const r = await this.request(Cmd.FileMkdir, p, 10000);
+        return r.payload.readInt32LE(0);
+    }
+
     /** Device-side CRC and size, so unchanged files can be skipped. */
     async fileCrc(name: string): Promise<{ rc: number; crc: number; size: number }> {
         const nameBuf = Buffer.from(name, "utf8");

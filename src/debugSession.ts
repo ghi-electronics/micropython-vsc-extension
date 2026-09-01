@@ -33,6 +33,7 @@ const VARREF_GLOBALS_BASE = 1000;
 export class MicroPythonDebugSession extends DebugSession {
     private link = new DeviceLink();
     private programDir = "";
+    private entryName = "main.py";
     private breakpoints = new Map<string, number[]>();
     private frames: StackFrameInfo[] = [];
     private stopOnEntry = false;
@@ -79,6 +80,7 @@ export class MicroPythonDebugSession extends DebugSession {
         try {
             this.stopOnEntry = args.stopOnEntry ?? false;
             this.programDir = path.dirname(args.program);
+            this.entryName = path.basename(args.program);
 
             const ports = await findPorts();
             const devicePort = args.device || ports.debug;
@@ -91,7 +93,7 @@ export class MicroPythonDebugSession extends DebugSession {
             this.attachEvents();
 
             if (args.sync !== false) {
-                await this.syncWorkspace(args.program);
+                await this.syncWorkspace();
             }
 
             // Reboot into a halt so breakpoints can be set before anything runs.
@@ -110,26 +112,77 @@ export class MicroPythonDebugSession extends DebugSession {
         }
     }
 
-    /** Push .py files whose device-side CRC does not match, and nothing else. */
-    private async syncWorkspace(program: string): Promise<void> {
-        const dir = path.dirname(program);
-        let names: string[];
+    /**
+     * Map a local file to the path it gets on the device.
+     *
+     * Paths are relative to the program's directory and use forward slashes,
+     * which is what the device's filesystem and its co_filename report. The
+     * entry script is always deployed as main.py, because that is what
+     * MicroPython runs on boot -- so a project whose entry is app.py still
+     * works, and breakpoints in app.py are matched against main.py.
+     */
+    private toDevicePath(localPath: string): string {
+        const rel = path.relative(this.programDir, localPath).split(path.sep).join("/");
+        return rel === this.entryName ? "main.py" : rel;
+    }
+
+    /** Inverse of toDevicePath, for turning a device frame back into a source. */
+    private toLocalPath(devicePath: string): string {
+        const rel = devicePath === "main.py" ? this.entryName : devicePath;
+        return path.join(this.programDir, ...rel.split("/"));
+    }
+
+    /** Every .py file under the program directory, as absolute paths. */
+    private collectSources(dir: string, out: string[] = []): string[] {
+        let entries: fs.Dirent[];
         try {
-            names = fs.readdirSync(dir).filter((n) => n.endsWith(".py"));
+            entries = fs.readdirSync(dir, { withFileTypes: true });
         } catch {
-            names = [];
+            return out;
         }
-        // The entry script is always pushed as main.py, which is what the
-        // device runs on boot.
-        const entry = path.basename(program);
-        for (const name of names) {
-            const data = fs.readFileSync(path.join(dir, name));
-            const target = name === entry ? "main.py" : name;
+        for (const e of entries) {
+            // Skip things that are never program source; __pycache__ in
+            // particular would otherwise be deployed to a device that cannot
+            // use it and has little room to spare.
+            if (e.name.startsWith(".") || e.name === "__pycache__") {
+                continue;
+            }
+            const full = path.join(dir, e.name);
+            if (e.isDirectory()) {
+                this.collectSources(full, out);
+            } else if (e.name.endsWith(".py")) {
+                out.push(full);
+            }
+        }
+        return out;
+    }
+
+    /** Push .py files whose device-side CRC does not match, and nothing else. */
+    private async syncWorkspace(): Promise<void> {
+        const files = this.collectSources(this.programDir);
+        const madeDirs = new Set<string>();
+
+        for (const local of files) {
+            const target = this.toDevicePath(local);
+            const data = fs.readFileSync(local);
+
             const info = await this.link.fileCrc(target);
             if (info.rc === 0 && info.size === data.length && info.crc === crc32(data)) {
                 this.log(`unchanged  ${target}`);
                 continue;
             }
+
+            // Create parent directories before writing into them. Done in
+            // order so nested paths work, and only once per directory.
+            const parts = target.split("/");
+            for (let i = 1; i < parts.length; i++) {
+                const dir = parts.slice(0, i).join("/");
+                if (!madeDirs.has(dir)) {
+                    madeDirs.add(dir);
+                    await this.link.mkdir(dir);
+                }
+            }
+
             const rc = await this.link.putFile(target, data);
             this.log(rc === 0 ? `pushed     ${target} (${data.length} bytes)`
                 : `FAILED     ${target} (${rc})`);
@@ -188,14 +241,17 @@ export class MicroPythonDebugSession extends DebugSession {
         response: DebugProtocol.SetBreakpointsResponse,
         args: DebugProtocol.SetBreakpointsArguments,
     ): Promise<void> {
-        const file = args.source.path ? path.basename(args.source.path) : "";
+        // Key by device path, not basename: lib/util.py and util.py are
+        // different files, and matching on the basename alone would set a
+        // breakpoint in both.
+        const devicePath = args.source.path ? this.toDevicePath(args.source.path) : "";
         const lines = (args.breakpoints ?? []).map((b) => b.line);
-        this.breakpoints.set(file, lines);
+        this.breakpoints.set(devicePath, lines);
 
         const all: { file: string; line: number }[] = [];
         for (const [f, ls] of this.breakpoints) {
             for (const l of ls) {
-                all.push({ file: f === path.basename(this.programEntry()) ? "main.py" : f, line: l });
+                all.push({ file: f, line: l });
             }
         }
         let accepted = 0;
@@ -207,14 +263,15 @@ export class MicroPythonDebugSession extends DebugSession {
         // The device caps how many breakpoints it will hold (8). Report which
         // ones are actually in force rather than claiming all of them: VS Code
         // greys out unverified breakpoints, which is the truth the user needs.
+        const mine = this.breakpoints.get(devicePath) ?? [];
+        const others = all.length - mine.length;
         response.body = {
-            breakpoints: lines.map((line, i) => ({ verified: i < accepted, line })),
+            breakpoints: lines.map((line, i) => ({
+                verified: others + i < accepted,
+                line,
+            })),
         };
         this.sendResponse(response);
-    }
-
-    private programEntry(): string {
-        return path.join(this.programDir, "main.py");
     }
 
     protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
@@ -244,12 +301,12 @@ export class MicroPythonDebugSession extends DebugSession {
     }
 
     /**
-     * The device reports the name it loaded the module under ("main.py"), not
-     * the editor's path, so map it back into the workspace.
+     * The device reports the path it loaded the module under, which is
+     * relative to the filesystem root, not the editor's absolute path.
      */
     private sourceFor(deviceFile: string): Source {
-        const local = path.join(this.programDir, deviceFile);
-        return new Source(deviceFile, fs.existsSync(local) ? local : undefined);
+        const local = this.toLocalPath(deviceFile);
+        return new Source(path.basename(local), fs.existsSync(local) ? local : undefined);
     }
 
     protected scopesRequest(
