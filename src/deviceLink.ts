@@ -38,6 +38,13 @@ export interface StackFrameInfo {
     func: string;
 }
 
+export interface DeviceCapabilities {
+    protocol: number;
+    maxBreakpoints: number;
+    maxPayload: number;
+    maxValueLen: number;
+}
+
 export interface DevicePorts {
     repl?: string;
     debug?: string;
@@ -229,6 +236,21 @@ export class DeviceLink extends EventEmitter {
         }
         const r = await this.request(Cmd.ExecutionBreakpoints, Buffer.concat(parts));
         return r.payload.readInt32LE(0);
+    }
+
+    /**
+     * Device limits. Asking beats assuming: the host sizes its requests from
+     * these rather than hardcoding numbers that would silently drift if the
+     * firmware changed.
+     */
+    async capabilities(): Promise<DeviceCapabilities> {
+        const r = await this.request(Cmd.ExecutionCapabilities);
+        return {
+            protocol: r.payload.readUInt16LE(0),
+            maxBreakpoints: r.payload.readUInt16LE(2),
+            maxPayload: r.payload.readUInt16LE(4),
+            maxValueLen: r.payload.readUInt16LE(6),
+        };
     }
 
     async threads(): Promise<number> {

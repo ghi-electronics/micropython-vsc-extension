@@ -23,6 +23,7 @@ export const enum Cmd {
     MonitorReboot = 0x00000007,
 
     ExecutionStep = 0x00020003,
+    ExecutionCapabilities = 0x00020008,
     ExecutionBreakpoints = 0x00020005,
     /** device -> host event */
     ExecutionStopped = 0x00020006,

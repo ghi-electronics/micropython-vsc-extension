@@ -13,7 +13,7 @@ import {
 import { DebugProtocol } from "@vscode/debugprotocol";
 import * as path from "path";
 import * as fs from "fs";
-import { DeviceLink, findPorts, StackFrameInfo } from "./deviceLink";
+import { DeviceLink, findPorts, StackFrameInfo, DeviceCapabilities } from "./deviceLink";
 import { Cond, RebootFlag, StepMode, StopReason, STOP_REASON_TO_DAP, Scope as DevScope } from "./protocol";
 import { crc32 } from "./wireProtocol";
 
@@ -38,6 +38,7 @@ export class MicroPythonDebugSession extends DebugSession {
     private frames: StackFrameInfo[] = [];
     private stopOnEntry = false;
     private configurationDone = false;
+    private caps?: DeviceCapabilities;
 
     public constructor() {
         super();
@@ -103,6 +104,16 @@ export class MicroPythonDebugSession extends DebugSession {
             await delay(1200);
             await this.reconnect(args.device);
             await this.link.conditions(Cond.Attached, 0);
+
+            try {
+                this.caps = await this.link.capabilities();
+                this.log(`device protocol v${this.caps.protocol}, `
+                    + `${this.caps.maxBreakpoints} breakpoints max`);
+            } catch {
+                // Older firmware without the query: fall back rather than fail
+                // the whole session over a diagnostic.
+                this.caps = undefined;
+            }
 
             this.sendResponse(response);
             // Only now does VS Code send setBreakpoints, then configurationDone.
