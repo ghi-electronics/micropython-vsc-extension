@@ -98,6 +98,7 @@ export class MicroPythonDebugSession extends DebugSession {
             }
 
             // Reboot into a halt so breakpoints can be set before anything runs.
+            this.log(`project ${this.programDir}, entry ${this.entryName}`);
             this.log("Restarting device...");
             this.link.reboot(RebootFlag.WaitForDebugger);
             await this.link.close();
@@ -271,6 +272,11 @@ export class MicroPythonDebugSession extends DebugSession {
         } catch (e) {
             this.log(`breakpoints: ${(e as Error).message}`);
         }
+        // Log what was actually sent. A breakpoint that silently never fires is
+        // hard to reason about otherwise -- the usual cause is that the file
+        // moved under a line number VS Code had remembered.
+        const summary = all.map((b) => `${b.file}:${b.line}`).join(", ");
+        this.log(`breakpoints -> [${summary}] accepted ${accepted}`);
         // The device caps how many breakpoints it will hold (8). Report which
         // ones are actually in force rather than claiming all of them: VS Code
         // greys out unverified breakpoints, which is the truth the user needs.

@@ -38,4 +38,4 @@ def blink(n):
 count = 0
 while True:
     count = blink(count)
-    time.sleep_ms(300)
+    time.sleep_ms(500)
