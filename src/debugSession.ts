@@ -171,7 +171,16 @@ export class MicroPythonDebugSession extends DebugSession {
                 return;
             }
             const reason = STOP_REASON_TO_DAP[ev.reason] ?? "pause";
-            this.sendEvent(new StoppedEvent(reason, THREAD_ID));
+            const stopped = new StoppedEvent(reason, THREAD_ID);
+            if (ev.reason === StopReason.Exception) {
+                // The device sends the exception text through the output path
+                // just before stopping, so it is already in the Debug Console.
+                (stopped as DebugProtocol.StoppedEvent).body.description =
+                    "Uncaught exception";
+                (stopped as DebugProtocol.StoppedEvent).body.text =
+                    `Uncaught exception at ${ev.file}:${ev.line}`;
+            }
+            this.sendEvent(stopped);
         });
     }
 
