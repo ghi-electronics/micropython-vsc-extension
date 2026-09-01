@@ -130,6 +130,8 @@ export class DeviceLink extends EventEmitter {
                 p.resolve(m);
             } else if (m.cmd === Cmd.ExecutionStopped) {
                 this.emit("stopped", this.parseStopped(m));
+            } else if (m.cmd === Cmd.MonitorOutput) {
+                this.emit("output", m.payload.toString("utf8"));
             } else {
                 this.emit("unsolicited", m);
             }

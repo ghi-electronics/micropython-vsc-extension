@@ -18,6 +18,8 @@ export const FLAG_ACK = 0x8000;
 /** Commands. Device-to-host events are marked. */
 export const enum Cmd {
     MonitorPing = 0x00000000,
+    /** device -> host event: program stdout */
+    MonitorOutput = 0x00000001,
     MonitorReboot = 0x00000007,
 
     ExecutionStep = 0x00020003,
