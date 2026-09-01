@@ -11,9 +11,13 @@
 # The Watch panel and the Debug Console prompt both evaluate expressions in
 # the halted frame, so try:  len(readings)   or   config["pin"] * 2
 #
-# Note the Variables panel shows Globals only. Local variable names do not
-# exist in upstream MicroPython bytecode, so n and total are not listed --
-# though evaluating them by name in Watch does work.
+# Locals are NOT available, in the panel or in Watch. Local variable names do
+# not exist in upstream MicroPython bytecode: their values live in numbered
+# slots and nothing maps the name back to a slot. Watching `n` or `total` gives
+# NameError, because evaluation resolves names against module globals.
+#
+# Workaround: assign what you need to inspect to a module-level name, or read
+# it from an expression that only uses globals.
 
 import time
 
