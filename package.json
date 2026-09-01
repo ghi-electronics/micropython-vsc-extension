@@ -1,6 +1,7 @@
 {
   "name": "micropython-sitcore-debug",
   "displayName": "MicroPython for SITCore",
+  "version": "0.1.0",
   "description": "Source-level MicroPython debugging over USB for GHI Electronics SITCore devices.",
   "publisher": "ghi-electronics",
   "license": "MIT",
