@@ -6,6 +6,7 @@
  * signal. Everything above this layer speaks in commands, not bytes.
  */
 import { EventEmitter } from "events";
+import * as fs from "fs";
 import { Decoder, build, Message } from "./wireProtocol";
 
 // Loaded on first use, not at import time.  serialport is a native module; if
@@ -84,6 +85,57 @@ function interfaceOf(pnpId: string | undefined): number | undefined {
     return undefined;
 }
 
+/**
+ * On macOS, prefer the callout device over the dial-in one.
+ *
+ * A serial device appears twice: /dev/tty.usbmodemXXXX and /dev/cu.usbmodemXXXX.
+ * The tty. node is the dial-in side and waits on carrier detect before it will
+ * open; cu. is the callout side and is what you want for talking to a device.
+ * Listing reports the tty. name, so swap to the cu. sibling when one exists.
+ * A no-op everywhere else, since the substring appears in no other platform's
+ * port paths.
+ */
+function preferCallout(devicePath: string): string {
+    if (!devicePath.startsWith("/dev/tty.")) {
+        return devicePath;
+    }
+    const callout = devicePath.replace("/dev/tty.", "/dev/cu.");
+    try {
+        return fs.existsSync(callout) ? callout : devicePath;
+    } catch {
+        return devicePath;
+    }
+}
+
+/**
+ * Turn a serial open failure into something the user can act on.
+ *
+ * The raw errors are terse and platform-specific, and the two common ones have
+ * nothing to do with this extension: on Linux the serial nodes are owned by a
+ * group the user is usually not in, and on Windows another program holding the
+ * port is the usual cause.
+ */
+function explainOpenError(err: Error, devicePath: string): Error {
+    const code = (err as NodeJS.ErrnoException).code ?? "";
+    const msg = err.message ?? "";
+
+    if (code === "EACCES" || /permission denied/i.test(msg)) {
+        return new Error(
+            `Permission denied opening ${devicePath}. On Linux the serial `
+            + "devices belong to the 'dialout' group ('uucp' on Arch); add "
+            + "yourself with:\n"
+            + "    sudo usermod -a -G dialout $USER\n"
+            + "then log out and back in for it to take effect.");
+    }
+    if (code === "EBUSY" || /access is denied|resource busy/i.test(msg)) {
+        return new Error(
+            `${devicePath} is busy. Another program has the port open -- a `
+            + "serial terminal, a REPL tool such as mpremote, or a previous "
+            + "debug session that has not closed yet.");
+    }
+    return err;
+}
+
 export async function findPorts(): Promise<DevicePorts> {
     const ports = await serialport().SerialPort.list();
     const result: DevicePorts = {};
@@ -94,9 +146,9 @@ export async function findPorts(): Promise<DevicePorts> {
     for (const p of mine) {
         const iface = interfaceOf(p.pnpId);
         if (iface === IFACE_DEBUG) {
-            result.debug = p.path;
+            result.debug = preferCallout(p.path);
         } else if (iface === IFACE_REPL) {
-            result.repl = p.path;
+            result.repl = preferCallout(p.path);
         }
     }
 
@@ -107,8 +159,8 @@ export async function findPorts(): Promise<DevicePorts> {
     // cannot override a positive identification on Windows or Linux.
     if (!result.debug && mine.length === 2 && mine.every((p: any) => !interfaceOf(p.pnpId))) {
         const sorted = mine.map((p: any) => p.path as string).sort();
-        result.repl = sorted[0];
-        result.debug = sorted[1];
+        result.repl = preferCallout(sorted[0]);
+        result.debug = preferCallout(sorted[1]);
     }
     return result;
 }
@@ -150,7 +202,7 @@ export class DeviceLink extends EventEmitter {
                 { path, baudRate: 115200 },
                 (err: Error | null | undefined) => {
                 if (err) {
-                    reject(err);
+                    reject(explainOpenError(err, path));
                 } else {
                     this.port = port;
                     resolve();

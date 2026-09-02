@@ -1,0 +1,21 @@
+# GHI Electronics SITCore running MicroPython, dual CDC (VCP+VCP).
+#
+# Install with:
+#     sudo cp 99-sitcore-micropython.rules /etc/udev/rules.d/
+#     sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Two problems this solves, both of which look like "the extension cannot find
+# or open the board":
+#
+#   1. Permissions. /dev/ttyACM* belongs to root:dialout, and a desktop user is
+#      often not in that group. TAG+="uaccess" grants the locally logged-in user
+#      access without any group change; MODE="0666" is the fallback for systems
+#      without logind.
+#
+#   2. ModemManager. On most desktop distributions it probes every new ttyACM
+#      device and sends AT commands at it for the first several seconds. On a
+#      debug channel that is line noise: the first connection after plugging in
+#      fails or behaves strangely, then recovers, which is a miserable thing to
+#      diagnose. ID_MM_DEVICE_IGNORE tells it to leave this device alone.
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1b9f", ATTRS{idProduct}=="f105", MODE="0666", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"

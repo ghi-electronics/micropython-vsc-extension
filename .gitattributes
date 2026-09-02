@@ -1,3 +1,9 @@
 # Shell scripts must keep LF endings: a CRLF shebang line makes the script
 # unrunnable on Linux and macOS ("bad interpreter").
 *.sh text eol=lf
+
+# Batch files are Windows-only and need CRLF.
+*.bat text eol=crlf
+
+# udev rules are consumed on Linux and must not gain CR characters.
+*.rules text eol=lf
