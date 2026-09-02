@@ -55,6 +55,9 @@ export interface DeviceCapabilities {
     vmHookCalls: number;
 }
 
+/** Longest breakpoint path the device stores (MP_DBG_FILE_MATCH_MAX). */
+const DEVICE_PATH_MAX = 127;
+
 export interface DevicePorts {
     repl?: string;
     debug?: string;
@@ -134,6 +137,32 @@ function explainOpenError(err: Error, devicePath: string): Error {
             + "debug session that has not closed yet.");
     }
     return err;
+}
+
+/**
+ * Shorten a path the device cannot store, keeping the end.
+ *
+ * The device matches breakpoints by suffix on a path boundary, so the tail is
+ * the part that identifies the file; the head only adds precision. A path too
+ * long to store used to be dropped, which meant a breakpoint in a deeply nested
+ * package silently never fired. Trimming to the last whole segments that fit
+ * keeps it working, at worst matching a same-named file in a different tree --
+ * which the boundary rule still makes unlikely.
+ */
+export function trimToTail(devicePath: string, max = DEVICE_PATH_MAX): string {
+    if (Buffer.byteLength(devicePath, "utf8") <= max) {
+        return devicePath;
+    }
+    const parts = devicePath.split("/");
+    let tail = parts[parts.length - 1];
+    for (let i = parts.length - 2; i >= 0; i--) {
+        const candidate = `${parts[i]}/${tail}`;
+        if (Buffer.byteLength(candidate, "utf8") > max) {
+            break;
+        }
+        tail = candidate;
+    }
+    return tail;
 }
 
 export async function findPorts(): Promise<DevicePorts> {
@@ -368,7 +397,7 @@ export class DeviceLink extends EventEmitter {
         let size = 2;
         let sent = 0;
         for (const bp of bps) {
-            const name = Buffer.from(bp.file, "utf8");
+            const name = Buffer.from(trimToTail(bp.file), "utf8");
             const entry = 2 + name.length + 4;
             if (size + entry > MAX_PAYLOAD) {
                 break;
@@ -439,6 +468,21 @@ export class DeviceLink extends EventEmitter {
         // The device acknowledges, waits ~50 ms, detaches USB and resets. Give
         // it that window before the port is closed under it.
         await new Promise((r) => setTimeout(r, 250));
+    }
+
+    /** Filesystem block size and usage, in blocks. */
+    async stat(path = ""): Promise<{ rc: number; blockSize: number; total: number; free: number }> {
+        const nameBuf = Buffer.from(path, "utf8");
+        const p = Buffer.alloc(2 + nameBuf.length);
+        p.writeUInt16LE(nameBuf.length, 0);
+        nameBuf.copy(p, 2);
+        const r = await this.request(Cmd.FileStat, p);
+        return {
+            rc: r.payload.readInt32LE(0),
+            blockSize: r.payload.readUInt32LE(4),
+            total: r.payload.readUInt32LE(8),
+            free: r.payload.readUInt32LE(12),
+        };
     }
 
     /** Push a file, chunked to fit MAX_PAYLOAD. Returns 0 on success. */

@@ -46,6 +46,9 @@ export class MicroPythonDebugSession extends DebugSession {
     private programDir = "";
     private entryName = "main.py";
     private breakpoints = new Map<string, number[]>();
+    /** Condition and hit-count state, keyed by "devicePath:line". */
+    private conditions = new Map<string,
+        { condition?: string; hitCondition?: string; hits: number }>();
     private frames: StackFrameInfo[] = [];
     private stopOnEntry = false;
     private configurationDone = false;
@@ -72,6 +75,12 @@ export class MicroPythonDebugSession extends DebugSession {
         response.body.supportsTerminateRequest = true;
         response.body.supportsEvaluateForHovers = true;
         response.body.supportsSetVariable = true;
+        // Conditions are evaluated here rather than on the device: the device
+        // would have to run Python from inside its instruction hook, which is
+        // the path that once made it halt inside itself. Stopping, asking, and
+        // resuming is slower per hit but cannot deadlock the VM.
+        response.body.supportsConditionalBreakpoints = true;
+        response.body.supportsHitConditionalBreakpoints = true;
         this.sendResponse(response);
     }
 
@@ -272,6 +281,39 @@ export class MicroPythonDebugSession extends DebugSession {
 
         this.warnShadowedSources(files.map((f) => this.toDevicePath(f)));
 
+        // Check there is room before writing anything. The filesystem is small
+        // enough that a library project can fill it, and finding out halfway
+        // through leaves the device holding half a program.
+        try {
+            const fsInfo = await this.link.stat();
+            if (fsInfo.rc === 0 && fsInfo.blockSize > 0) {
+                const freeBytes = fsInfo.free * fsInfo.blockSize;
+                const totalBytes = fsInfo.total * fsInfo.blockSize;
+                this.log(`filesystem ${Math.round(freeBytes / 1024)} KB free `
+                    + `of ${Math.round(totalBytes / 1024)} KB`);
+                // Compared against the whole filesystem, not the free space:
+                // most of a re-deploy overwrites files that are already there
+                // and frees their blocks again, so free space would refuse
+                // deploys that actually fit. This catches the case that cannot
+                // fit however it is ordered.
+                let needed = 0;
+                for (const local of files) {
+                    try { needed += fs.statSync(local).size; } catch { /* vanished */ }
+                }
+                if (needed > totalBytes) {
+                    throw new Error(
+                        `The project is ${Math.round(needed / 1024)} KB but the `
+                        + `device filesystem is only ${Math.round(totalBytes / 1024)} KB.`);
+                }
+            }
+        } catch (e) {
+            // Older firmware has no File_Stat. Not knowing the size is not a
+            // reason to refuse to deploy; a failed write still reports clearly.
+            if ((e as Error).message.includes("device filesystem")) {
+                throw e;
+            }
+        }
+
         for (const local of files) {
             const target = this.toDevicePath(local);
             deployed.add(target);
@@ -383,6 +425,11 @@ export class MicroPythonDebugSession extends DebugSession {
                 // Expected: we asked it to halt here. Not a user-visible stop.
                 return;
             }
+            if (ev.reason === StopReason.Breakpoint) {
+                // May resume without ever telling VS Code it stopped.
+                void this.applyCondition(ev);
+                return;
+            }
             const reason = STOP_REASON_TO_DAP[ev.reason] ?? "pause";
             const stopped = new StoppedEvent(reason, THREAD_ID);
             if (ev.reason === StopReason.Exception) {
@@ -407,6 +454,24 @@ export class MicroPythonDebugSession extends DebugSession {
         const devicePath = args.source.path ? this.toDevicePath(args.source.path) : "";
         const lines = (args.breakpoints ?? []).map((b) => b.line);
         this.breakpoints.set(devicePath, lines);
+
+        // Conditions live here, not on the device. Hit counts restart whenever
+        // the breakpoint is re-set, which is what the editor implies when you
+        // edit one.
+        for (const key of [...this.conditions.keys()]) {
+            if (key.startsWith(`${devicePath}:`)) {
+                this.conditions.delete(key);
+            }
+        }
+        for (const b of args.breakpoints ?? []) {
+            if (b.condition || b.hitCondition) {
+                this.conditions.set(`${devicePath}:${b.line}`, {
+                    condition: b.condition,
+                    hitCondition: b.hitCondition,
+                    hits: 0,
+                });
+            }
+        }
 
         const all: { file: string; line: number }[] = [];
         for (const [f, ls] of this.breakpoints) {
@@ -597,6 +662,75 @@ export class MicroPythonDebugSession extends DebugSession {
                     : (trusted && i < derived.length ? derived[i] : ""),
             }))
             .filter((v) => v.name !== "" && v.value !== "");
+    }
+
+    /**
+     * Decide whether a breakpoint stop is real, and resume quietly if not.
+     *
+     * The device stops on every hit and the condition is checked here, in the
+     * halted frame, through the same evaluator Watch uses. That costs a round
+     * trip per hit, but it keeps Python off the device's instruction hook --
+     * running the VM from inside its own trace path is what once made the
+     * debugger halt inside itself.
+     *
+     * A condition that fails to evaluate stops the program rather than
+     * swallowing the hit: a typo in a condition should be visible, not silently
+     * turn the breakpoint off.
+     */
+    private async applyCondition(ev: { line: number; file: string }): Promise<void> {
+        const key = [...this.conditions.keys()].find((k) => {
+            const line = Number(k.slice(k.lastIndexOf(":") + 1));
+            const file = k.slice(0, k.lastIndexOf(":"));
+            return line === ev.line
+                && (ev.file.endsWith(file) || file.endsWith(ev.file));
+        });
+        const state = key ? this.conditions.get(key) : undefined;
+
+        if (state) {
+            state.hits++;
+            let stop = true;
+            if (state.condition) {
+                try {
+                    const r = await this.link.evaluate(0, state.condition);
+                    stop = r.ok
+                        ? !["False", "0", "None", "", "()", "[]", "{}"].includes(r.value.trim())
+                        : true;   // a broken condition must not hide the stop
+                    if (!r.ok) {
+                        this.log(`breakpoint condition "${state.condition}": ${r.value}`);
+                    }
+                } catch (e) {
+                    this.log(`breakpoint condition: ${(e as Error).message}`);
+                }
+            }
+            if (stop && state.hitCondition) {
+                stop = this.hitConditionMet(state.hitCondition, state.hits);
+            }
+            if (!stop) {
+                void this.link.resume();
+                return;
+            }
+        }
+
+        const stopped = new StoppedEvent("breakpoint", THREAD_ID);
+        this.sendEvent(stopped);
+    }
+
+    /** "5" means every 5th hit; ">5", ">=5", "==5" and "%5" also work. */
+    private hitConditionMet(expr: string, hits: number): boolean {
+        const m = expr.trim().match(/^(>=|<=|==|>|<|%)?\s*(\d+)$/);
+        if (!m) {
+            return true;            // unparseable: do not silently skip stops
+        }
+        const n = Number(m[2]);
+        switch (m[1]) {
+            case ">": return hits > n;
+            case ">=": return hits >= n;
+            case "<": return hits < n;
+            case "<=": return hits <= n;
+            case "==": return hits === n;
+            case "%": return n > 0 && hits % n === 0;
+            default: return n > 0 && hits % n === 0;
+        }
     }
 
     /** Line of the `def` that encloses `line`, searching upward for the name. */

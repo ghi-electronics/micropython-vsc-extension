@@ -41,6 +41,8 @@ export const enum Cmd {
     FileDelete = 0x00030002,
     FileMkdir = 0x00030003,
     FileList = 0x00030004,
+    /** Filesystem size, so a deploy can fail before it starts rather than part-way. */
+    FileStat = 0x00030005,
 }
 
 /** Debugger state bits, as understood by Execution_ChangeConditions. */
