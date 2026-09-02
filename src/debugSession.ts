@@ -16,6 +16,7 @@ import * as fs from "fs";
 import { DeviceLink, findPorts, StackFrameInfo, DeviceCapabilities, DeviceVariable } from "./deviceLink";
 import { Cond, RebootFlag, StepMode, StopReason, STOP_REASON_TO_DAP, Scope as DevScope } from "./protocol";
 import { crc32 } from "./wireProtocol";
+import { deriveLocalNames, verifyAgainstDevice } from "./localNames";
 
 interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
     program: string;
@@ -37,6 +38,8 @@ const THREAD_ID = 1;
 // Scope references start above the device's handle range (handles are small
 // integers from 1), so the two never collide in variablesReference.
 const VARREF_GLOBALS_BASE = 1000;
+/** Locals scopes sit in their own band, above globals. */
+const VARREF_LOCALS_BASE = 2000;
 
 export class MicroPythonDebugSession extends DebugSession {
     private link = new DeviceLink();
@@ -491,15 +494,23 @@ export class MicroPythonDebugSession extends DebugSession {
         response: DebugProtocol.ScopesResponse,
         args: DebugProtocol.ScopesArguments,
     ): void {
-        // Only globals. Local variable names are not recoverable in upstream
-        // MicroPython -- the bytecode prelude has no slot-to-identifier map --
-        // so a Locals scope would list values with no names, which is worse
-        // than not offering it. See micropython_debugger.md 2.2 and 9.2.
+        // "Arguments", not "Locals", because that is exactly what it is.
+        //
+        // Argument names are stored in the bytecode so the VM can bind keyword
+        // arguments, so the device reports them exactly -- inside a .mpy too.
+        // The other locals share the state array with the value stack and
+        // nothing records where the boundary falls, so they are not offered:
+        // a wrong name against a leftover stack value is worse than an honest
+        // absence. Watch and the Debug Console still evaluate any expression
+        // in the frame.
         //
         // The reference encodes the frame index, so a scope request against an
-        // outer frame reads that frame's module globals.
+        // outer frame reads that frame.
         response.body = {
-            scopes: [new Scope("Globals", VARREF_GLOBALS_BASE + args.frameId, true)],
+            scopes: [
+                new Scope("Locals", VARREF_LOCALS_BASE + args.frameId, false),
+                new Scope("Globals", VARREF_GLOBALS_BASE + args.frameId, true),
+            ],
         };
         this.sendResponse(response);
     }
@@ -510,7 +521,12 @@ export class MicroPythonDebugSession extends DebugSession {
     ): Promise<void> {
         let vars: DeviceVariable[] = [];
         try {
-            if (args.variablesReference >= VARREF_GLOBALS_BASE) {
+            if (args.variablesReference >= VARREF_LOCALS_BASE) {
+                // A Locals scope: the reference encodes which frame to read.
+                const frame = args.variablesReference - VARREF_LOCALS_BASE;
+                vars = this.nameLocals(
+                    frame, await this.link.variables(frame, DevScope.Locals));
+            } else if (args.variablesReference >= VARREF_GLOBALS_BASE) {
                 // A scope: the reference encodes which frame's globals to read.
                 vars = await this.link.variables(
                     args.variablesReference - VARREF_GLOBALS_BASE, DevScope.Globals);
@@ -531,6 +547,68 @@ export class MicroPythonDebugSession extends DebugSession {
             })),
         };
         this.sendResponse(response);
+    }
+
+
+    /**
+     * Put names to the local slots the device reported by position.
+     *
+     * The device names the arguments from the bytecode and sends every other
+     * slot unnamed. Those can be worked out from the source, but only if the
+     * analysis is actually tracking the compiler -- so it is checked against
+     * the argument names first, which the device knows for certain. On a
+     * mismatch nothing past the arguments is named, because a value under the
+     * wrong name is worse than a value under no name.
+     *
+     * Slots the device sent empty are locals not yet assigned at this point in
+     * the function; they are dropped rather than shown as blank.
+     */
+    private nameLocals(frameIndex: number, slots: DeviceVariable[]): DeviceVariable[] {
+        const named = slots.filter((v) => v.name !== "").length;
+        const frame = this.frames[frameIndex];
+        let derived: string[] = [];
+
+        if (frame && frame.func !== "<module>") {
+            try {
+                const file = this.toLocalPath(frame.file);
+                const text = fs.readFileSync(file, "utf8");
+                const defLine = this.findDefLine(text, frame.func, frame.line);
+                if (defLine > 0) {
+                    derived = deriveLocalNames(text, defLine);
+                }
+            } catch {
+                // No source for this frame -- a .mpy with no .py beside it, or
+                // a file outside the project. Arguments still stand on their own.
+                derived = [];
+            }
+        }
+
+        const trusted = derived.length > 0
+            && verifyAgainstDevice(derived, slots.slice(0, named).map((v) => v.name));
+        if (!trusted && derived.length > 0) {
+            this.log(`locals: source analysis disagreed with the device for `
+                + `${frame?.func}(), naming arguments only`);
+        }
+
+        return slots
+            .map((v, i) => ({
+                ...v,
+                name: v.name !== "" ? v.name
+                    : (trusted && i < derived.length ? derived[i] : ""),
+            }))
+            .filter((v) => v.name !== "" && v.value !== "");
+    }
+
+    /** Line of the `def` that encloses `line`, searching upward for the name. */
+    private findDefLine(source: string, func: string, line: number): number {
+        const lines = source.split(/\r?\n/);
+        for (let i = Math.min(line, lines.length) - 1; i >= 0; i--) {
+            const m = lines[i].match(/^\s*(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)/);
+            if (m && m[1] === func) {
+                return i + 1;
+            }
+        }
+        return 0;
     }
 
     protected async evaluateRequest(
@@ -558,9 +636,10 @@ export class MicroPythonDebugSession extends DebugSession {
         args: DebugProtocol.SetVariableArguments,
     ): Promise<void> {
         // Only globals can be set. Container elements would need the parent
-        // expression to build an assignment target, and locals have no name to
-        // bind to at all -- the same limit the panel has.
-        if (args.variablesReference < VARREF_GLOBALS_BASE) {
+        // expression to build an assignment target, and a local is a VM slot
+        // rather than a binding the device can assign through by name.
+        if (args.variablesReference < VARREF_GLOBALS_BASE
+            || args.variablesReference >= VARREF_LOCALS_BASE) {
             this.sendErrorResponse(response, 2001,
                 "Only global variables can be changed.");
             return;

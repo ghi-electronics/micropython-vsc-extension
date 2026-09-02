@@ -14,10 +14,15 @@ with expandable lists, dicts and objects, Watch and hover evaluation, `print()`
 in the Debug Console, and workspace deployment -- all over a single USB cable,
 on a second CDC interface so the REPL stays usable on the first.
 
-Local variables are not shown. Upstream MicroPython does not record local
-*names* in its bytecode, and adding them would break compatibility with stock
-`.mpy` files and the standard library ecosystem. Globals and Watch expressions
-cover module-level state.
+Local variables are shown, and they are never guessed at. MicroPython stores
+argument names in the bytecode, so the device reports those exactly -- inside a
+`.mpy` too. The remaining locals are worked out from your source, and that
+analysis is checked against the argument names the device knows for certain
+before any of it is used. If the two disagree, only the arguments are named
+rather than risking a value labelled with the wrong name.
+
+None of this changes the bytecode format, so stock `.mpy` files and the whole
+MicroPython library ecosystem keep working.
 
 ## Using libraries
 
