@@ -111,7 +111,7 @@ export class MicroPythonDebugSession extends DebugSession {
             }
 
             // Reboot into a halt so breakpoints can be set before anything runs.
-            this.log("extension 0.1.0 (built 2026-09-01 14:12)");
+            this.log("extension 0.1.0 (built 2026-09-02)");
             this.log(`project ${this.programDir}, entry ${this.entryName}`);
             this.log("Restarting device...");
             await this.link.reboot(RebootFlag.WaitForDebugger);
@@ -212,8 +212,17 @@ export class MicroPythonDebugSession extends DebugSession {
             }
 
             const rc = await this.link.putFile(target, data);
-            this.log(rc === 0 ? `pushed     ${target} (${data.length} bytes)`
-                : `FAILED     ${target} (${rc})`);
+            if (rc !== 0) {
+                // Do not carry on and reboot into a half-deployed program. The
+                // usual cause is a full filesystem, and the symptom without
+                // this -- code that runs but is not the code on screen -- is
+                // the most confusing failure this tool has.
+                this.log(`FAILED     ${target} (${rc})`);
+                throw new Error(
+                    `Could not write ${target} to the device (error ${rc}). `
+                    + "The filesystem may be full.");
+            }
+            this.log(`pushed     ${target} (${data.length} bytes)`);
         }
 
         await this.removeStale(deployed);

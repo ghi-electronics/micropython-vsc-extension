@@ -1,7 +1,12 @@
-# Multi-file sample: a package in a subdirectory.
+# Multi-file sample: a module in a subdirectory.
 #
 #   main.py          this file, the entry point
 #   lib/mathutil.py  a module it imports
+#
+# The device puts /flash/lib on sys.path, so anything in lib/ is imported by
+# its own name -- "import mathutil", not "from lib import mathutil". That is
+# how a third-party library dropped into lib/ is meant to be used, so the
+# sample uses the same shape.
 #
 # Press F5, then set a breakpoint in lib/mathutil.py on line 5 (scaled = ...).
 #
@@ -16,7 +21,7 @@
 
 import time
 
-from lib import mathutil
+import mathutil
 
 
 def process(n):
