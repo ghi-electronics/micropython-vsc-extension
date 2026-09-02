@@ -41,5 +41,11 @@ if /i "%~1"=="package" (
     echo     code --install-extension micropython-sitcore-debug.vsix
 )
 
+if /i not "%~1"=="package" (
+    echo.
+    echo Compiled to out\ -- enough to run with F5 in VS Code.
+    echo To build an installable .vsix, run:  %~nx0 package
+)
+
 echo ==^> done
 exit /b 0
