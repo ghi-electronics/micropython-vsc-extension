@@ -93,7 +93,28 @@ async function main() {
     const okAfter = info.rc === 0 && info.size === SIZE && info.crc === want;
     console.log(`   size=${info.size}/${SIZE} crc=${okAfter ? "match" : "MISMATCH"}`);
 
-    console.log("\n4. cleaning up");
+    // The transfer now holds the file open across chunks, so one the host
+    // abandons -- cable pulled, VS Code killed -- leaves a handle open. A new
+    // transfer must close it rather than append to it.
+    console.log("\n4. abandoned transfer, then a fresh one");
+    const head = Buffer.alloc(8);
+    head.writeUInt32LE(1, 0);            // FIRST, deliberately no LAST
+    const nb = Buffer.from("abandon.dat", "utf8");
+    head.writeUInt16LE(nb.length, 4);
+    head.writeUInt16LE(400, 6);
+    await link.request(0x00030000,
+        Buffer.concat([head, nb, payload(400)]), 10000);
+    console.log("   started abandon.dat and walked away");
+
+    const fresh = payload(1024);
+    const rc2 = await link.putFile("fresh.dat", fresh);
+    const f2 = await link.fileCrc("fresh.dat");
+    const okFresh = rc2 === 0 && f2.size === 1024 && f2.crc === crc32(fresh);
+    console.log(`   fresh.dat afterwards: size=${f2.size}/1024 crc=${okFresh ? "match" : "MISMATCH"}`);
+    await link.deleteFile("abandon.dat").catch(() => {});
+    await link.deleteFile("fresh.dat").catch(() => {});
+
+    console.log("\n5. cleaning up");
     await link.deleteFile(NAME);
     await link.close();
 
@@ -101,8 +122,10 @@ async function main() {
     console.log(`   throughput      : ${rate.toFixed(1)} KB/s`);
     console.log(`   intact before   : ${okBefore ? "PASS" : "FAIL"}`);
     console.log(`   survived reset  : ${okAfter ? "PASS" : "FAIL"}  <- the one that matters`);
-    console.log(`\nRESULT: ${okBefore && okAfter ? "PASS" : "FAIL"}`);
-    process.exit(okBefore && okAfter ? 0 : 1);
+    console.log(`   abandoned xfer  : ${okFresh ? "PASS" : "FAIL"}`);
+    const pass = okBefore && okAfter && okFresh;
+    console.log(`\nRESULT: ${pass ? "PASS" : "FAIL"}`);
+    process.exit(pass ? 0 : 1);
 }
 
 main().catch((e) => { console.error("ERROR:", e.message); process.exit(1); });
