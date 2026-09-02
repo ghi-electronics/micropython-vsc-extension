@@ -110,6 +110,26 @@ function main() {
     if (!warned) { failures++; }
     console.log(`${warned ? "PASS" : "FAIL"}  warns that shadowed.mpy hides shadowed.py`);
 
+    // A .mpy compiled with an absolute path reports that build-time path in its
+    // frames. It resolves to nothing on this machine, so the frame must still be
+    // traced back to the local source through what was deployed.
+    const s2 = new MicroPythonDebugSession();
+    s2.programDir = root;
+    s2.entryName = "main.py";
+    s2.deployedLocal.set("lib/vendor/driver.mpy",
+        path.join(root, "lib", "vendor", "driver.mpy"));
+    const cases = [
+        ["D:/build/somewhere/lib/vendor/driver.py", true,  "absolute build-time path"],
+        ["lib/vendor/driver.py",                    true,  "plain relative path"],
+        ["lib/other/driver.py",                     false, "same basename, different dir"],
+    ];
+    for (const [given, shouldResolve, label] of cases) {
+        const src = s2.sourceFor(given);
+        const ok = shouldResolve ? !!src.path : !src.path;
+        if (!ok) { failures++; }
+        console.log(`${ok ? "PASS" : "FAIL"}  frame resolution: ${label}`);
+    }
+
     fs.rmSync(root, { recursive: true, force: true });
     console.log(`\nRESULT: ${failures === 0 ? "PASS" : "FAIL"}`);
     process.exit(failures === 0 ? 0 : 1);
