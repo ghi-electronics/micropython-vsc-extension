@@ -140,5 +140,19 @@
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
     "typescript": "^5.3.0"
-  }
+  },
+  "icon": "images/logo.png",
+  "galleryBanner": {
+    "color": "#2E3440",
+    "theme": "dark"
+  },
+  "keywords": [
+    "micropython",
+    "sitcore",
+    "ghi",
+    "embedded",
+    "debugger",
+    "stm32",
+    "usb"
+  ]
 }
