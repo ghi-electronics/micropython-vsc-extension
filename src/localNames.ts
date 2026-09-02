@@ -13,8 +13,9 @@
  * "Reproduces" is a claim, not a guarantee, so it is checked rather than
  * trusted: the device's argument names are authoritative, and if this analysis
  * disagrees with them the whole result is discarded. See verifyAgainstDevice().
- * A debugger that labels a value with the wrong name is worse than one that
- * leaves it unlabelled.
+ * Names are matched to slots by position, so a single wrong name is not one
+ * wrong entry -- it shifts every name after it. Leaving a value unlabelled is
+ * the safe failure; labelling it wrongly is not.
  */
 
 /** A binding site found in the source, in the order the compiler would see it. */

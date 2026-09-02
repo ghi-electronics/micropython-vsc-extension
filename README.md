@@ -25,30 +25,9 @@ devices, for users who would rather not use TinyCLR. A board runs MicroPython
 | **Deploy on F5** | Only the files that changed, by CRC. Removes files you deleted locally. |
 | **Live REPL** | A terminal on the board — usable *while stopped at a breakpoint*. |
 
-## Three things that make it different
-
-**It tells you the truth about your variables.**
-MicroPython does not record local variable names in its bytecode, so a debugger has to
-work them out. Argument names are read from the bytecode itself, exactly. The rest are
-derived from your source — and then *checked* against the names the device knows for
-certain. If the two disagree you get the arguments alone, rather than a value sitting
-under the wrong name. It would rather tell you less than mislead you.
-
-**It leaves no trace on your board.**
-The debugger is part of the firmware. Nothing is copied to the filesystem, there is no
-module for your program to import, and there is no `boot.py` of ours to collide with
-yours. Your program cannot see the debugger — and the debugger keeps working when your
-program locks up in a tight loop.
-
-**Your REPL keeps working while you debug.**
-The board presents two USB serial interfaces: the debugger owns one, the REPL owns the
-other. Stop at a breakpoint, open the device shell, and read a pin or try an expression
-without disturbing the halt.
-
 ## Getting started
 
-1. Flash the SITCore MicroPython firmware, with the MODE pin high so the board
-   enumerates as two serial interfaces.
+1. Flash the SITCore MicroPython firmware.
 2. Open a folder containing a `.py` file.
 3. Press **F5**, and pick *MicroPython (SITCore, USB)*.
 
@@ -73,39 +52,17 @@ Console, no breakpoints.
 
 ## Using libraries
 
-Your code stays ordinary MicroPython. Nothing about the bytecode format is changed, so
-stock `.mpy` files and the standard library ecosystem work unmodified.
+Both `.py` and `.mpy` files are deployed, and **breakpoints work inside a `.mpy`**.
 
-Anything in `lib/` is on the device's `sys.path`, so a module dropped there is imported
-by its own name — `import mathutil`, not `from lib import mathutil`.
+If a `.py` and a `.mpy` exist for the same module, MicroPython imports the `.mpy`, so an
+out-of-date one puts breakpoints at the lines it was compiled with. The extension warns
+when it sees both.
 
-Both `.py` and `.mpy` are deployed, and **breakpoints work inside a `.mpy`**: the
-compiled form keeps its line table and the name of the source it came from. Precompiling
-is worth it on a small filesystem.
-
-When precompiling, use a **relative** path — `mpy-cross` stores the path exactly as you
-type it, and that is what breakpoints match against:
-
-```
-mpy-cross -o lib/greet.mpy lib/greet.py          # stores "lib/greet.py"
-mpy-cross -o lib/greet.mpy C:/proj/lib/greet.py  # stores the absolute path
-```
-
-Either works — the extension falls back to matching by name — but the relative form
-opens the right file first time.
-
-Avoid shipping `foo.py` and `foo.mpy` together. MicroPython imports the `.mpy`, so a
-stale one silently wins and breakpoints land at the lines it was compiled with. The
-extension warns when it sees both.
-
-Data files are not deployed unless you ask, since the filesystem is small:
+Data files are deployed only if you list them, since the filesystem is small:
 
 ```json
 "include": ["data/*.json", "**/*.csv"]
 ```
-
-`mip` cannot install packages on the device — SC13xxx has no network. Download them on
-the PC and put them in `lib/`.
 
 ## Known limits
 
@@ -121,8 +78,7 @@ the PC and put them in `lib/`.
 
 ## Requirements
 
-- A SITCore device running the MicroPython firmware from the companion fork, with the
-  MODE pin high so it enumerates two CDC interfaces
+- A SITCore device running the MicroPython firmware from the companion fork
 - VS Code 1.85 or newer
 
 Windows, Linux and macOS are all supported. The one native dependency ships prebuilt for
