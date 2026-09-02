@@ -279,18 +279,32 @@ export class DeviceLink extends EventEmitter {
      * The device caps the count; it returns how many it accepted.
      */
     async setBreakpoints(bps: { file: string; line: number }[]): Promise<number> {
+        // Send as many as fit in one payload, not as many as the user set.
+        // The device holds 16, but 16 long paths do not fit in 512 bytes, and
+        // an oversized frame is dropped -- which would look like breakpoints
+        // silently not working. Truncating here instead means the ones we do
+        // send are the ones the device reports back, so the extras show up
+        // unverified in the editor rather than vanishing.
         const parts: Buffer[] = [];
         const head = Buffer.alloc(2);
-        head.writeUInt16LE(bps.length, 0);
         parts.push(head);
+        let size = 2;
+        let sent = 0;
         for (const bp of bps) {
             const name = Buffer.from(bp.file, "utf8");
-            const b = Buffer.alloc(2 + name.length + 4);
+            const entry = 2 + name.length + 4;
+            if (size + entry > MAX_PAYLOAD) {
+                break;
+            }
+            const b = Buffer.alloc(entry);
             b.writeUInt16LE(name.length, 0);
             name.copy(b, 2);
             b.writeUInt32LE(bp.line, 2 + name.length);
             parts.push(b);
+            size += entry;
+            sent++;
         }
+        head.writeUInt16LE(sent, 0);
         const r = await this.request(Cmd.ExecutionBreakpoints, Buffer.concat(parts));
         return r.payload.readInt32LE(0);
     }
