@@ -64,6 +64,14 @@
                 "type": "boolean",
                 "description": "Halt before the first line of the program.",
                 "default": false
+              },
+              "include": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Extra files to deploy, as globs relative to the program. Code (.py and .mpy) is always deployed; use this for data files the program reads at runtime, e.g. [\"data/*.json\"].",
+                "default": []
               }
             }
           }

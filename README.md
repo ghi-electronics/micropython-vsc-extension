@@ -19,6 +19,42 @@ Local variables are not shown. Upstream MicroPython does not record local
 `.mpy` files and the standard library ecosystem. Globals and Watch expressions
 cover module-level state.
 
+## Using libraries
+
+Anything in `lib/` is on the device's `sys.path`, so a third-party module dropped
+there is imported by its own name -- `import mathutil`, not `from lib import
+mathutil`.
+
+Both `.py` and `.mpy` are deployed, and **breakpoints work inside a `.mpy`**: the
+compiled form keeps its line table and the name of the source it was built from.
+Precompiling is worth it on a 111 KB filesystem.
+
+One thing to get right when precompiling: `mpy-cross` stores the path exactly as
+you type it, and that stored path is what breakpoints match against. Compile with
+a **relative** path from the project directory:
+
+```
+mpy-cross -o lib/greet.mpy lib/greet.py      # good: stores "lib/greet.py"
+mpy-cross -o lib/greet.mpy C:/proj/lib/greet.py   # stores the absolute path
+```
+
+Either still works -- the extension falls back to matching by name -- but the
+relative form is what makes the frame open the right file first time.
+
+Avoid shipping `foo.py` and `foo.mpy` together. MicroPython imports the `.mpy`,
+so an out-of-date one silently wins and breakpoints land at the line numbers it
+was compiled with. The extension warns when it sees both.
+
+Data files are not deployed unless you ask, since the filesystem is small. List
+them in `launch.json`:
+
+```json
+"include": ["data/*.json", "**/*.csv"]
+```
+
+`mip` cannot install packages on the device -- there is no network on SC13xxx.
+Download them on the PC and put them in `lib/`.
+
 ## How it fits together
 
 | Layer | Where |

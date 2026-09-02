@@ -22,6 +22,12 @@ interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
     sync?: boolean;
     device?: string;
     stopOnEntry?: boolean;
+    /**
+     * Extra files to deploy, as globs relative to the program directory.
+     * Code (.py and .mpy) is always deployed; this is for the data a program
+     * reads at runtime -- a config file, a lookup table, a calibration blob.
+     */
+    include?: string[];
 }
 
 /** The device is single-threaded; DAP still requires a thread id. */
@@ -41,6 +47,12 @@ export class MicroPythonDebugSession extends DebugSession {
     private stopOnEntry = false;
     private configurationDone = false;
     private caps?: DeviceCapabilities;
+    /**
+     * Local paths of everything this session deployed, keyed by the device path.
+     * Used to resolve a frame whose filename is not a device path at all --
+     * see sourceFor().
+     */
+    private deployedLocal = new Map<string, string>();
 
     public constructor() {
         super();
@@ -107,7 +119,7 @@ export class MicroPythonDebugSession extends DebugSession {
             }
 
             if (args.sync !== false) {
-                await this.syncWorkspace();
+                await this.syncWorkspace(args.include ?? []);
             }
 
             // Reboot into a halt so breakpoints can be set before anything runs.
@@ -158,8 +170,47 @@ export class MicroPythonDebugSession extends DebugSession {
         return path.join(this.programDir, ...rel.split("/"));
     }
 
-    /** Every .py file under the program directory, as absolute paths. */
-    private collectSources(dir: string, out: string[] = []): string[] {
+    /**
+     * File types that are program code and are always deployed.
+     *
+     * .mpy is included because precompiling is how you fit a real library onto
+     * a 111 KB filesystem, and it debugs like source: the loader keeps the line
+     * table, and the original filename is stored as qstr_table[0], so
+     * breakpoints and stack frames still resolve to the .py it was built from.
+     */
+    private static readonly CODE_EXT = [".py", ".mpy"];
+
+    /**
+     * Turn one glob into a regex. Supports ** (any depth), * (within a path
+     * segment) and ?. Enough for "data/*.json" or "**\/*.csv", which is what
+     * these are for; anything more and the user can list files explicitly.
+     */
+    private static globToRegExp(glob: string): RegExp {
+        let re = "";
+        for (let i = 0; i < glob.length; i++) {
+            const c = glob[i];
+            if (c === "*") {
+                if (glob[i + 1] === "*") {
+                    re += ".*";
+                    i++;
+                    if (glob[i + 1] === "/") { i++; }
+                } else {
+                    re += "[^/]*";
+                }
+            } else if (c === "?") {
+                re += "[^/]";
+            } else {
+                re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+            }
+        }
+        return new RegExp(`^${re}$`);
+    }
+
+    /**
+     * Files to deploy, as absolute paths: all code, plus anything matching the
+     * launch config's `include` globs.
+     */
+    private collectSources(dir: string, includes: RegExp[], out: string[] = []): string[] {
         let entries: fs.Dirent[];
         try {
             entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -167,7 +218,7 @@ export class MicroPythonDebugSession extends DebugSession {
             return out;
         }
         for (const e of entries) {
-            // Skip things that are never program source; __pycache__ in
+            // Skip things that are never program content; __pycache__ in
             // particular would otherwise be deployed to a device that cannot
             // use it and has little room to spare.
             if (e.name.startsWith(".") || e.name === "__pycache__") {
@@ -175,23 +226,53 @@ export class MicroPythonDebugSession extends DebugSession {
             }
             const full = path.join(dir, e.name);
             if (e.isDirectory()) {
-                this.collectSources(full, out);
-            } else if (e.name.endsWith(".py")) {
+                this.collectSources(full, includes, out);
+                continue;
+            }
+            const rel = path.relative(this.programDir, full).split(path.sep).join("/");
+            const isCode = MicroPythonDebugSession.CODE_EXT.some((x) => e.name.endsWith(x));
+            if (isCode || includes.some((r) => r.test(rel))) {
                 out.push(full);
             }
         }
         return out;
     }
 
-    /** Push .py files whose device-side CRC does not match, and nothing else. */
-    private async syncWorkspace(): Promise<void> {
-        const files = this.collectSources(this.programDir);
+    /**
+     * Warn when a .py and a .mpy would both be deployed for the same module.
+     *
+     * MicroPython imports the .mpy in preference to the .py, and the .mpy
+     * carries the *source* filename -- so an out-of-date .mpy does not just
+     * shadow the edits, it makes breakpoints land in the .py at line numbers
+     * from whenever it was last compiled. That is the "my change did nothing"
+     * failure in its most confusing form, so say so rather than let it be
+     * discovered.
+     */
+    private warnShadowedSources(targets: string[]): void {
+        const mpy = new Set(
+            targets.filter((t) => t.endsWith(".mpy")).map((t) => t.slice(0, -4)));
+        for (const t of targets) {
+            if (t.endsWith(".py") && mpy.has(t.slice(0, -3))) {
+                this.log(`WARNING    ${t} is shadowed by ${t.slice(0, -3)}.mpy -- `
+                    + "the device will run the .mpy. Recompile it or remove it.");
+            }
+        }
+    }
+
+    /** Push files whose device-side CRC does not match, and nothing else. */
+    private async syncWorkspace(includeGlobs: string[]): Promise<void> {
+        const includes = includeGlobs.map(
+            (g) => MicroPythonDebugSession.globToRegExp(g));
+        const files = this.collectSources(this.programDir, includes);
         const madeDirs = new Set<string>();
         const deployed = new Set<string>();
+
+        this.warnShadowedSources(files.map((f) => this.toDevicePath(f)));
 
         for (const local of files) {
             const target = this.toDevicePath(local);
             deployed.add(target);
+            this.deployedLocal.set(target, local);
             const data = fs.readFileSync(local);
 
             const info = await this.link.fileCrc(target);
@@ -235,7 +316,7 @@ export class MicroPythonDebugSession extends DebugSession {
      * `import` still finds it -- code that appears to work because of a file
      * you believe is gone, which is a miserable thing to debug.
      *
-     * Only .py files are removed, and never boot.py. Anything else on the
+     * Only code (.py, .mpy) is removed, and never boot.py. Anything else on the
      * filesystem is the user's: data files, logs, configuration. A deploy has
      * no business deleting those, which is why this reconciles rather than
      * wiping the filesystem and starting clean.
@@ -252,8 +333,8 @@ export class MicroPythonDebugSession extends DebugSession {
                 const full = dir === "" ? e.name : `${dir}/${e.name}`;
                 if (e.isDir) {
                     await walk(full);
-                } else if (full.endsWith(".py") && full !== "boot.py"
-                    && !keep.has(full)) {
+                } else if (MicroPythonDebugSession.CODE_EXT.some((x) => full.endsWith(x))
+                    && full !== "boot.py" && !keep.has(full)) {
                     const rc = await this.link.deleteFile(full);
                     this.log(rc === 0 ? `removed    ${full}`
                         : `remove failed ${full} (${rc})`);
@@ -386,8 +467,24 @@ export class MicroPythonDebugSession extends DebugSession {
      * relative to the filesystem root, not the editor's absolute path.
      */
     private sourceFor(deviceFile: string): Source {
-        const local = this.toLocalPath(deviceFile);
-        return new Source(path.basename(local), fs.existsSync(local) ? local : undefined);
+        const direct = this.toLocalPath(deviceFile);
+        if (fs.existsSync(direct)) {
+            return new Source(path.basename(direct), direct);
+        }
+
+        // A .mpy records whatever path mpy-cross was given, so a module
+        // compiled as an absolute path reports that build-time path here --
+        // which resolves to nothing on this machine, and would leave the frame
+        // unopenable. Fall back to matching the tail against what we deployed,
+        // on a path boundary so util.py cannot claim mathutil.py.
+        const wanted = deviceFile.split(/[\/]/).join("/");
+        for (const [devicePath, localPath] of this.deployedLocal) {
+            const stem = devicePath.replace(/[.]mpy$/, ".py");
+            if (wanted === stem || wanted.endsWith("/" + stem)) {
+                return new Source(path.basename(localPath), localPath);
+            }
+        }
+        return new Source(path.basename(wanted));
     }
 
     protected scopesRequest(
