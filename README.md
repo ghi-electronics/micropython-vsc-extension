@@ -6,9 +6,12 @@ Set a breakpoint in the gutter. Press F5. Your code deploys, the board restarts,
 execution stops on that line — with the call stack, your variables, and a working
 Watch window. No JTAG, no debug probe, no wiring.
 
-This is standalone MicroPython firmware and tooling for GHI Electronics SITCore
-devices, for users who would rather not use TinyCLR. A board runs MicroPython
-**or** TinyCLR, never both.
+Proper debugging has always come with SITCore: run TinyCLR and you write C# and debug
+it in Visual Studio. This puts MicroPython on the same footing — breakpoints, stepping,
+call stack and variables, in VS Code, on the same board and the same cable.
+
+Pick the language that suits the job. A board runs MicroPython **or** TinyCLR, never
+both.
 
 ## What you get
 
@@ -128,6 +131,9 @@ Windows is the build host:
 build-extension.bat            compile to the out directory
 build-extension.bat package    compile, then produce an installable .vsix
 ```
+
+The package is named for the version in `package.json`, so a `.vsix` on disk says which
+build it is: `micropython-sitcore-debug_v0.1.0.vsix`.
 
 One `.vsix` built on Windows installs on Windows, Linux and macOS.
 

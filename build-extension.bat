@@ -9,7 +9,7 @@ REM prebuilt binaries for Windows, Linux and macOS, and all of them go into the
 REM .vsix -- so a package built here installs on a customer's Linux or Mac
 REM machine with no toolchain on their side.
 
-setlocal
+setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 where npm >nul 2>&1
@@ -30,15 +30,27 @@ call npm run compile
 if errorlevel 1 exit /b 1
 
 if /i "%~1"=="package" (
-    echo ==^> packaging
+    REM Stamp the package with the version from package.json, so a .vsix on
+    REM disk says which build it is. Read via a temp file rather than a for/f
+    REM capture, which is easy to get subtly wrong with quoting.
+    call node -p "require('./package.json').version" > "%TEMP%\mpy_vsix_ver.txt"
+    set "VER="
+    if exist "%TEMP%\mpy_vsix_ver.txt" set /p VER=<"%TEMP%\mpy_vsix_ver.txt"
+    del "%TEMP%\mpy_vsix_ver.txt" >nul 2>&1
+    if not defined VER (
+        echo ERROR: could not read the version from package.json.
+        exit /b 1
+    )
+    set "VSIX=micropython-sitcore-debug_v!VER!.vsix"
+    echo ==^> packaging !VSIX!
     REM Fetched on demand rather than pinned as a devDependency: packaging is a
     REM release step, not something every build needs installed for.
-    call npx --yes @vscode/vsce package --out micropython-sitcore-debug.vsix
+    call npx --yes @vscode/vsce package --out "!VSIX!"
     if errorlevel 1 exit /b 1
     echo.
-    echo Built micropython-sitcore-debug.vsix
+    echo Built !VSIX!
     echo Install with:
-    echo     code --install-extension micropython-sitcore-debug.vsix
+    echo     code --install-extension !VSIX!
 )
 
 if /i not "%~1"=="package" (

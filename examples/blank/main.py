@@ -32,6 +32,7 @@ def blink(n):
     led.toggle()
     n = next_count(n)
     print("count is", n)
+    print("count was", n)
     return n
 
 
