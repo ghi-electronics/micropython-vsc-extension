@@ -51,6 +51,7 @@ export class MicroPythonDebugSession extends DebugSession {
         { condition?: string; hitCondition?: string; hits: number }>();
     private frames: StackFrameInfo[] = [];
     private stopOnEntry = false;
+    private noDebug = false;
     private configurationDone = false;
     private caps?: DeviceCapabilities;
     /**
@@ -104,7 +105,13 @@ export class MicroPythonDebugSession extends DebugSession {
         args: LaunchArgs,
     ): Promise<void> {
         try {
-            this.stopOnEntry = args.stopOnEntry ?? false;
+            // Run Without Debugging still attaches, because device output is
+            // only forwarded to an attached session -- detaching would silence
+            // print(). It halts at entry like a normal launch too, so nothing
+            // printed before the host reconnects is lost, then resumes at once
+            // with no breakpoints set.
+            this.noDebug = args.noDebug === true;
+            this.stopOnEntry = this.noDebug ? false : (args.stopOnEntry ?? false);
             this.programDir = path.dirname(args.program);
             this.entryName = path.basename(args.program);
 
@@ -137,7 +144,9 @@ export class MicroPythonDebugSession extends DebugSession {
             // Reboot into a halt so breakpoints can be set before anything runs.
             this.log("extension 0.1.0 (built 2026-09-02)");
             this.log(`project ${this.programDir}, entry ${this.entryName}`);
-            this.log("Restarting device...");
+            this.log(this.noDebug
+                ? "Running without debugging -- output only, no breakpoints."
+                : "Restarting device...");
             await this.link.reboot(RebootFlag.WaitForDebugger);
             await this.link.close();
             await delay(1200);
@@ -423,6 +432,13 @@ export class MicroPythonDebugSession extends DebugSession {
             }
             if (ev.reason === StopReason.Entry && !this.configurationDone) {
                 // Expected: we asked it to halt here. Not a user-visible stop.
+                return;
+            }
+            if (this.noDebug) {
+                // No debug UI exists to resume from, so a stop here would look
+                // like a hang. Nothing should set a breakpoint in this mode,
+                // but releasing is the safe response if anything does.
+                void this.link.resume();
                 return;
             }
             if (ev.reason === StopReason.Breakpoint) {

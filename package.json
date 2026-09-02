@@ -17,7 +17,12 @@
     "Programming Languages"
   ],
   "activationEvents": [
-    "onDebugResolve:micropython"
+    "onDebugResolve:micropython",
+    "onCommand:micropython-sitcore.openShell",
+    "onCommand:micropython-sitcore.deviceInfo",
+    "onCommand:micropython-sitcore.eraseDevice",
+    "onCommand:micropython-sitcore.newProject",
+    "onCommand:micropython-sitcore.selectDevice"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -25,6 +30,22 @@
       {
         "command": "micropython-sitcore.selectDevice",
         "title": "MicroPython: Select Device"
+      },
+      {
+        "command": "micropython-sitcore.openShell",
+        "title": "MicroPython: Open Device Shell (REPL)"
+      },
+      {
+        "command": "micropython-sitcore.deviceInfo",
+        "title": "MicroPython: Device Info"
+      },
+      {
+        "command": "micropython-sitcore.eraseDevice",
+        "title": "MicroPython: Erase Deployed Files"
+      },
+      {
+        "command": "micropython-sitcore.newProject",
+        "title": "MicroPython: New Project"
       }
     ],
     "breakpoints": [
