@@ -26,7 +26,7 @@ both.
 | **`print()` output** | Straight into the Debug Console. |
 | **Exceptions** | Stops at the line that raised, not after the stack is gone. |
 | **Deploy on F5** | Only the files that changed, by CRC. Removes files you deleted locally. |
-| **Live REPL** | A terminal on the board — usable *while stopped at a breakpoint*. |
+| **Device console** | Program output live in a terminal, during a debug session or not. |
 
 ## Getting started
 
@@ -44,7 +44,7 @@ Starting from an empty folder? **MicroPython: New Project** writes a sample `mai
 
 | Command | What it does |
 |---|---|
-| MicroPython: Open Device Shell (REPL) | A terminal on the board, usable while debugging |
+| MicroPython: Open Device Shell (REPL) | Live program output; Ctrl-C stops the program for a `>>>` prompt |
 | MicroPython: Device Info | Firmware protocol version, limits, filesystem usage |
 | MicroPython: Erase Deployed Files | Removes deployed `.py` and `.mpy`, keeps `boot.py` |
 | MicroPython: New Project | Scaffolds an empty folder |
@@ -76,6 +76,9 @@ Data files are deployed only if you list them, since the filesystem is small:
 - **`@micropython.native` and `@micropython.viper` cannot be debugged.** They emit no
   trace events, so breakpoints inside them never fire. The code still runs correctly.
 - **Single-threaded.** `_thread` is not enabled on SC13xxx.
+- **The `>>>` prompt needs the program to stop.** MicroPython runs `main.py` to
+  completion before starting the REPL, so a program with a loop in it means nothing is
+  listening for what you type. Output still appears; Ctrl-C gets you a prompt.
 - **First deploy of a large project takes a few seconds.** After that only changed files
   are sent, so an edit-and-run cycle is a fraction of a second.
 

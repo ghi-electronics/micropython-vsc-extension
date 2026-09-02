@@ -34,7 +34,11 @@ class ReplPty implements vscode.Pseudoterminal {
     constructor(private readonly path: string) { }
 
     open(): void {
-        this.writeEmitter.fire(`Connecting to ${this.path}...\r\n`);
+        // Dim, so the note reads as ours rather than as device output.
+        const dim = (t: string) => `\x1b[2m${t}\x1b[0m\r\n`;
+        this.writeEmitter.fire(dim(`Device console on ${this.path}`));
+        this.writeEmitter.fire(dim(
+            "Program output appears here. Press Ctrl-C to stop the program and get a >>> prompt."));
         try {
             this.port = new (serialport().SerialPort)(
                 { path: this.path, baudRate: 115200 },
@@ -44,10 +48,9 @@ class ReplPty implements vscode.Pseudoterminal {
                         this.closeEmitter.fire(1);
                         return;
                     }
-                    // Ctrl-B leaves the raw REPL if something left it there, and
-                    // a bare newline draws the prompt so the terminal is not
-                    // blank until the user types.
-                    this.port.write("\x02\r\n");
+                    // Nothing is sent on connect. A newline would only draw a
+                    // prompt if the REPL happened to be listening, and a control
+                    // byte sent blindly shows up as a stray glyph when it is not.
                 });
         } catch (e) {
             this.writeEmitter.fire(`\r\n${(e as Error).message}\r\n`);
