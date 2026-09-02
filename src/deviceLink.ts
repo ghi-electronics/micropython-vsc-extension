@@ -60,30 +60,55 @@ export interface DevicePorts {
 }
 
 /**
- * Find the board's two CDC interfaces.
+ * Which USB interface a serial port belongs to, or undefined if the platform
+ * does not say.
  *
- * Windows exposes the composite interface number in the port's pnpId as
- * "MI_00" / "MI_02"; on Linux and macOS the interface shows up in the path or
- * in `pnpId` differently, so both spellings are checked.
+ * The board exposes two CDC interfaces on one device, and they have to be told
+ * apart: interface 0 is the REPL, interface 2 is the debug channel. Every
+ * platform spells that differently.
+ *
+ *   Windows  pnpId is the device instance path, USB\VID_...&PID_...&MI_02\...
+ *   Linux    pnpId is the /dev/serial/by-id name, which ends -if00 / -if02
+ *   macOS    nothing: the darwin lister does not populate pnpId at all
  */
+function interfaceOf(pnpId: string | undefined): number | undefined {
+    const id = (pnpId ?? "").toUpperCase();
+    if (id === "") {
+        return undefined;
+    }
+    for (const iface of [IFACE_REPL, IFACE_DEBUG]) {
+        if (id.includes(`MI_0${iface}`) || id.includes(`-IF0${iface}`)) {
+            return iface;
+        }
+    }
+    return undefined;
+}
+
 export async function findPorts(): Promise<DevicePorts> {
     const ports = await serialport().SerialPort.list();
     const result: DevicePorts = {};
-    for (const p of ports) {
-        const vid = parseInt(p.vendorId ?? "", 16);
-        const pid = parseInt(p.productId ?? "", 16);
-        if (vid !== USB_VID || pid !== USB_PID_CDC2) {
-            continue;
-        }
-        const id = (p.pnpId ?? "").toUpperCase();
-        const iface = id.includes(`MI_0${IFACE_DEBUG}`) ? IFACE_DEBUG
-            : id.includes(`MI_0${IFACE_REPL}`) ? IFACE_REPL
-                : undefined;
+    const mine: any[] = (ports as any[]).filter((p: any) =>
+        parseInt(p.vendorId ?? "", 16) === USB_VID
+        && parseInt(p.productId ?? "", 16) === USB_PID_CDC2);
+
+    for (const p of mine) {
+        const iface = interfaceOf(p.pnpId);
         if (iface === IFACE_DEBUG) {
             result.debug = p.path;
         } else if (iface === IFACE_REPL) {
             result.repl = p.path;
         }
+    }
+
+    // macOS, and any platform that reports no interface metadata: fall back to
+    // enumeration order. The two interfaces of one device are listed in
+    // interface order, so the lower path is the REPL and the higher is the
+    // debug channel. Only used when the metadata is genuinely absent, so this
+    // cannot override a positive identification on Windows or Linux.
+    if (!result.debug && mine.length === 2 && mine.every((p: any) => !interfaceOf(p.pnpId))) {
+        const sorted = mine.map((p: any) => p.path as string).sort();
+        result.repl = sorted[0];
+        result.debug = sorted[1];
     }
     return result;
 }
