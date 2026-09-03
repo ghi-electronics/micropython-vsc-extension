@@ -1,4 +1,4 @@
-# Sample program for the MicroPython SITCore debugger.
+# Sample program for the MicroPython debugger.
 #
 # Open this folder in VS Code and press F5.
 # Set a breakpoint by clicking the gutter next to line 32, led.toggle().
@@ -13,13 +13,13 @@
 #   - F5 (continue) runs on, and the print() on line 34 appears in the
 #     Debug Console
 #
-# The Variables panel stays empty on purpose: variable inspection is not
-# implemented yet.
+# Nothing board-specific here, so it runs on SITCore, Pico 2 and ESP32-S2 alike.
+# Keep the line numbers: the notes above and dap_sequence_test.js refer to them.
 
-import pyb
 import time
 
-led = pyb.LED(1)
+
+DELAY_MS = 500
 
 
 def next_count(n):
@@ -29,7 +29,7 @@ def next_count(n):
 
 
 def blink(n):
-    led.toggle()
+    doubled = n * 2
     n = next_count(n)
     print("count is", n)
     return n
@@ -38,4 +38,4 @@ def blink(n):
 count = 0
 while True:
     count = blink(count)
-    time.sleep_ms(500)
+    time.sleep_ms(DELAY_MS)

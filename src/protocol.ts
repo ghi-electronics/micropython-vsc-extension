@@ -114,6 +114,21 @@ export const USB_VID = 0x1b9f;
 export const USB_PID_CDC2 = 0xf105;
 
 /**
+ * Boards we know how to talk to.
+ *
+ * Every entry must present the debug protocol on its second CDC function, so
+ * the interface numbers below hold for all of them. Note the Pico deliberately
+ * keeps stock MicroPython's VID/PID: a board running stock firmware therefore
+ * matches here too, but exposes only one CDC, so findPorts() finds a REPL and
+ * no debug channel -- which is the correct answer for it.
+ */
+export interface KnownDevice { vid: number; pid: number; name: string; }
+export const KNOWN_DEVICES: KnownDevice[] = [
+    { vid: 0x1b9f, pid: 0xf105, name: "SITCore SC13xxx" },
+    { vid: 0x2e8a, pid: 0x0005, name: "Raspberry Pi Pico / Pico 2" },
+];
+
+/**
  * Composite interface numbers. CDC0 (interface 0) is the REPL; CDC1
  * (interface 2) carries the debug protocol.
  */

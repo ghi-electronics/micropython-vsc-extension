@@ -23,7 +23,7 @@ function serialport(): any {
 import {
     Cmd, Cond, FileFlag, RebootFlag, StepMode, Scope,
     FLAG_NON_CRITICAL, FLAG_REPLY, MAX_PAYLOAD,
-    USB_VID, USB_PID_CDC2, IFACE_REPL, IFACE_DEBUG,
+    KNOWN_DEVICES, IFACE_REPL, IFACE_DEBUG,
 } from "./protocol";
 
 export interface StoppedEvent {
@@ -168,9 +168,11 @@ export function trimToTail(devicePath: string, max = DEVICE_PATH_MAX): string {
 export async function findPorts(): Promise<DevicePorts> {
     const ports = await serialport().SerialPort.list();
     const result: DevicePorts = {};
-    const mine: any[] = (ports as any[]).filter((p: any) =>
-        parseInt(p.vendorId ?? "", 16) === USB_VID
-        && parseInt(p.productId ?? "", 16) === USB_PID_CDC2);
+    const mine: any[] = (ports as any[]).filter((p: any) => {
+        const vid = parseInt(p.vendorId ?? "", 16);
+        const pid = parseInt(p.productId ?? "", 16);
+        return KNOWN_DEVICES.some((d) => d.vid === vid && d.pid === pid);
+    });
 
     for (const p of mine) {
         const iface = interfaceOf(p.pnpId);

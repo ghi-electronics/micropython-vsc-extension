@@ -14,8 +14,11 @@ const Cond = { Stopped: 1, StopOnStart: 2, Attached: 4 };
 const Step = { In: 1, Over: 2, Out: 3 };
 const Reboot = { WaitForDebugger: 1 };
 
-const MAIN_PY = `import pyb, time
-led = pyb.LED(1)
+// Board-agnostic on purpose: only the time module, so this runs unchanged on
+// SITCore, rp2 and esp32.  Line numbers matter -- the assertions below pin the
+// breakpoint to line 11, step-over to 12 and step-in to 6 -- so keep the layout.
+const MAIN_PY = `import time
+total = 0
 
 
 def add(a, b):
@@ -24,7 +27,7 @@ def add(a, b):
 
 
 def blink(n):
-    led.toggle()
+    n = n + 1
     n = add(n, 1)
     return n
 
@@ -94,9 +97,23 @@ async function main() {
     console.log("\n3. reboot into halt (USB re-enumerates, reconnecting)");
     await link.reboot(Reboot.WaitForDebugger);
     await link.close();
-    await sleep(1200);
-    link = await connect();
-    if (!link) { console.log("   device did not come back"); process.exit(1); }
+    // Re-enumeration is not instant and its duration is not ours to predict: it
+    // varies by board, by host controller, and by whatever hub sits in between.
+    // Poll to a deadline rather than sleeping once and hoping -- a single fixed
+    // wait reports a slow enumeration as a dead board.
+    await sleep(600);
+    const deadline = Date.now() + 15000;
+    link = null;
+    for (let attempt = 1; !link && Date.now() < deadline; attempt++) {
+        link = await connect();
+        if (!link) {
+            if (attempt % 4 === 0) {
+                console.log(`   still waiting for the device (${Math.round((Date.now() - (deadline - 15000)) / 1000)}s)`);
+            }
+            await sleep(250);
+        }
+    }
+    if (!link) { console.log("   device did not come back within 15s"); process.exit(1); }
     let cond = await link.conditions();
     console.log(`   conditions=0x${cond.toString(16)} halted=${!!(cond & Cond.Stopped)}`);
     results.halted = !!(cond & Cond.Stopped);
