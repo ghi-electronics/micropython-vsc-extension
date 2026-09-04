@@ -30,8 +30,8 @@ plan and what was learned about the competing extension.**
 | Path | Role |
 |---|---|
 | `C:\Projects\2026\MicroPython\DebuggerExtension` | VS Code extension + host-side DAP server |
-| `C:\Projects\2026\MicroPython\Firmware\micropython` | MicroPython fork. `origin` = `ghi-electronics/micropython`, branch **`sitcore-debugger`** off tag **`v1.29.0`** |
-| `C:\Projects\2026\MicroPython\micropython_debugger.md` | this file |
+| `C:\Projects\2026\MicroPython\Firmware\micropython` | MicroPython fork. `origin` = `ghi-electronics/micropython-under-deverlop` (**private**), `upstream` = `micropython/micropython` (fetch only). Branch **`sitcore-debugger`** off tag **`v1.29.0`**. See 12.14 |
+| `DebuggerExtension\micropython-vsc-extension\micropython_debugger.md` | this file — version-controlled with the extension |
 
 **Reference-only roots (READ, never edit):**
 
@@ -69,7 +69,9 @@ Decided deliberately. Do not relitigate without new information.
 4. **F5 = deploy + run + debug** in one gesture, matching the TinyCLR experience (section 7).
 5. **Debug channel is a second USB CDC interface.** REPL stays on CDC0, debugger on CDC1.
 6. **Fork layout: one repo, branch off a release tag.** Work happens on `sitcore-debugger`,
-   branched from `v1.29.0` in the existing `ghi-electronics/micropython` fork. `master` is left
+   branched from `v1.29.0`. Since 2026-09-04 that branch lives in the **private**
+   `ghi-electronics/micropython-under-deverlop`; the public `ghi-electronics/micropython` fork
+   still exists but no longer carries the work (section 12.14). `master` is left
    untouched as a pure upstream mirror so GitHub's "Sync fork" always fast-forwards. The 2021
    SC13048 port is frozen at tag `sc13048-v1.15-2021` (branch `dev`), **not** rebased forward:
    of its 154 commits only ~221 lines were board definition, the rest was BrainPad / BrainGamer
@@ -808,8 +810,8 @@ needs. Revisit if the Windows route costs more than it saves. (User chose Window
 
 ### 11.3 Next actions, in order
 
-Everything from the 2026-09-02 review is done except item 1 below. Item 2 is decided and
-waiting on the Pico 2 port to be built.
+Everything from the 2026-09-02 review is done except item 1 below. Item 2 was decided on
+2026-09-03 and has since shipped on all four non-SITCore boards (12.8-12.13).
 
 1. **Caught-exception filters.** The uncaught test is conservative: an active `try` whose
    `except` would not match still suppresses the halt. Making it exact means deciding, in C at
@@ -820,13 +822,17 @@ waiting on the Pico 2 port to be built.
 2. ~~**The threading model.**~~ **DECIDED 2026-09-03: all-stop, single debug owner.** The
    model, the code facts behind it, and the two remaining assumptions to verify are in 12.3.
    SC13xxx is unaffected — `MICROPY_PY_THREAD` is 0 there — beyond a thread id in the protocol
-   that it always reports as 1. Implementation lands with the Pico 2 port, not before.
+   that it always reports as 1. Shipped with the rp2 port and verified deterministic (12.8).
 
 Smaller, if they ever matter: `Value_SetVariable` for locals (a slot is not a binding the
 device can assign by name), and expanding containers that are not list/tuple/dict/instance.
 
-**Everything else for SC13xxx is finished.** The next work is section 12 (Pico 2). Its stop
-model is now decided (12.3), so the second CDC — 12.4 step 2 — is the next thing to build.
+**Everything else for SC13xxx is finished**, and section 12 is done through ESP32-S2: three
+silicon families run the same unmodified engine (12.13). What is left is product work rather
+than engine work — the open items are listed at the end of 12.13 (a real QT Py ESP32-S2 board
+definition, the extension still naming itself SITCore) plus RP2040/RP2350 host disambiguation
+(both enumerate as `2e8a:0005`, so two Pi boards attached at once cannot be told apart) and the
+SC20xxx / STM32H743 port, not started.
 
 ### 11.4 What exists in the tree
 
@@ -1823,3 +1829,59 @@ one always fails silently and differently:
 Grep the port for its own idle loops (`mp_hal_delay_*`, `mp_hal_stdin_rx_chr`, any bespoke
 `EVENT_POLL_HOOK`) and confirm the pump is reached from each.
 
+### 12.14 Development moved to a private remote (2026-09-04)
+
+The work had been public the whole time it was being built: `sitcore-debugger` sat on the public
+`ghi-electronics/micropython` fork, readable by anyone who browsed there. That was not intended.
+The branch moved to a private repo so the ports can be finished before announcement, with the
+public fork left in place so the eventual PR still comes from a normal fork.
+
+**Remote layout now:**
+
+| Remote | URL | Role |
+|---|---|---|
+| `origin` | `ghi-electronics/micropython-under-deverlop` (private) | push target -- all work goes here |
+| `upstream` | `micropython/micropython` | fetch only, no write access; for rebasing onto new releases |
+
+The public fork still exists: 8 branches, `dev` as default, `sitcore-debugger` deleted from it.
+
+**The mirror push reports errors that are not errors.** The move was a `git clone --mirror` of the
+public fork, then `git push --mirror` into the new private repo. That prints a wall of
+
+```
+! [remote rejected] refs/pull/N/head -> refs/pull/N/head (deny updating a hidden ref)
+error: failed to push some refs
+```
+
+which is expected: `--mirror` tries to copy GitHub's read-only pull-request refs, which GitHub
+never lets anyone write. Every branch and tag went across regardless. **Verify with
+`git ls-remote --heads` and `--tags` against the source, not by the exit code** -- the exit code
+is always non-zero.
+
+**Tags are load-bearing.** `py/makeversionhdr.py` derives the firmware banner from
+`git describe --tags --dirty --always --match "v[1-9].*"`. Two consequences:
+
+- `v1.29.0` in this fork is a **lightweight** tag (`git cat-file -t v1.29.0` returns `commit`, not
+  `tag`). Plain `git describe` ignores lightweight tags and reports `v1.15-6895-g...` -- section
+  11.7's trap. MicroPython's own script passes `--tags`, so the build is correct; anything else
+  that shells out to `git describe` must pass it too.
+- A file-copy migration -- source without history or tags -- degrades the banner to a bare hash
+  via `--always`, or to `None` outside a repo entirely.
+
+**Why the history was kept rather than snapshotted.** Copying the source into a fresh repo was
+considered and rejected. The branch carries 33 commits that already follow `CODECONVENTIONS.md`
+(subsystem prefix per commit: `mpdebug:`, `SC13048Q:`) -- the form a MicroPython PR must take.
+Flattening them means re-splitting all 33 by hand later, and also gives up `git bisect` and the
+ability to rebase onto a new upstream release, which section 0 requires this fork to keep.
+Sign-off (`CODECONVENTIONS.md` line 30) is still missing from every commit; `git rebase --signoff`
+adds it across the series in one pass, but only while the commits exist.
+
+**Going public, when the time comes.** Push the finished branch to the public fork under a new
+name (`sitcore-debugger2` or similar) and open the PR from there. Nothing in the private repo
+needs undoing.
+
+**Two things that look wrong and are not.** The private repo's default branch came out as
+`archive/dev-2021` -- GitHub picks one during a mirror push. Both it and `dev` point at the same
+2021 commit `1deb1d6d0`, and work happens on `sitcore-debugger` regardless, so it was left alone.
+And `dev` is **not** a blank branch: it is the 2021 SC13048 port, on a lineage unrelated to
+`v1.29.0` (merge-base `9e1b25a99`). The debugger work must never be force-pushed onto it.

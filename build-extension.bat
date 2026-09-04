@@ -50,7 +50,10 @@ if /i "%~1"=="package" (
     echo.
     echo Built !VSIX!
     echo Install with:
-    echo     code --install-extension !VSIX!
+    REM --force matters: the version in package.json does not change between
+    REM builds, so without it VS Code sees the same version already installed
+    REM and silently skips -- which looks exactly like the new code not working.
+    echo     code --install-extension !VSIX! --force
 )
 
 if /i not "%~1"=="package" (

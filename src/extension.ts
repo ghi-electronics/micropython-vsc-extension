@@ -12,6 +12,7 @@ import { MicroPythonDebugSession } from "./debugSession";
 import { DeviceLink, findPorts } from "./deviceLink";
 import { Cond } from "./protocol";
 import { openDeviceShell } from "./replTerminal";
+import { updateFirmware, flashFromFile } from "./firmware/updateFirmware";
 
 const output = vscode.window.createOutputChannel("MicroPython SITCore");
 
@@ -33,6 +34,12 @@ export function activate(context: vscode.ExtensionContext): void {
             "micropython-sitcore.eraseDevice", () => { void eraseDevice(); }),
         vscode.commands.registerCommand(
             "micropython-sitcore.newProject", () => { void newProject(); }),
+        vscode.commands.registerCommand(
+            "micropython-sitcore.updateFirmware",
+            () => { void updateFirmware(context, output); }),
+        vscode.commands.registerCommand(
+            "micropython-sitcore.flashFromFile",
+            () => { void flashFromFile(context, output); }),
         // After a session that ran without a launch.json, offer to save one --
         // F5 works without it, but only after choosing from the debugger list
         // every time, and that list also contains debuggers that cannot drive a
