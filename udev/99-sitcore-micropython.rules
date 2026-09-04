@@ -35,3 +35,7 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="0005", MODE="0666"
 # own line -- many rp2 boards override MICROPY_HW_USB_VID/PID, so this list
 # grows with the supported-board list rather than by chip family.
 SUBSYSTEM=="tty", ATTRS{idVendor}=="239a", ATTRS{idProduct}=="80f8", MODE="0666", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+
+# ESP32-S2 / S3 with the debugger.  PID 0x4002 is 0x4000 | CDC count, so a
+# two-CDC build is distinct from stock MicroPython (0x4001) automatically.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="4002", MODE="0666", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"

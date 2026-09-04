@@ -41,6 +41,21 @@ const VARREF_GLOBALS_BASE = 1000;
 /** Locals scopes sit in their own band, above globals. */
 const VARREF_LOCALS_BASE = 2000;
 
+/** "<version> (built <ISO date> <time>)", from the installed files themselves. */
+function extensionBuildStamp(): string {
+    let version = "?";
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        version = require("../package.json").version ?? "?";
+    } catch { /* packaged layouts vary; the timestamp still tells the story */ }
+    let built = "unknown";
+    try {
+        const t = require("fs").statSync(__filename).mtime as Date;
+        built = t.toISOString().slice(0, 16).replace("T", " ");
+    } catch { /* ignore */ }
+    return `${version} (built ${built})`;
+}
+
 export class MicroPythonDebugSession extends DebugSession {
     private link = new DeviceLink();
     private programDir = "";
@@ -142,7 +157,12 @@ export class MicroPythonDebugSession extends DebugSession {
             }
 
             // Reboot into a halt so breakpoints can be set before anything runs.
-            this.log("extension 0.1.0 (built 2026-09-02)");
+            // Version and build time read from what is actually installed, never
+            // hardcoded. The version does not change between rebuilds, so
+            // "code --install-extension" silently skips without --force and the
+            // resulting failure is indistinguishable from a hardware fault. This
+            // line is how you tell whether VS Code is running what you just built.
+            this.log(`extension ${extensionBuildStamp()}`);
             this.log(`project ${this.programDir}, entry ${this.entryName}`);
             this.log(this.noDebug
                 ? "Running without debugging -- output only, no breakpoints."

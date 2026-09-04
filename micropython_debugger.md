@@ -1628,3 +1628,198 @@ that only a human pressing F5 on the target board would meet. When SC20xxx and t
 up, run F5 by hand on each before calling the port done — the hardware suite passing is necessary
 and not sufficient.
 
+### 12.10 Three rp2 boards, and what the second and third ones taught
+
+**Done 2026-09-03: Pico (RP2040), Pico 2 (RP2350) and Adafruit QT Py RP2040 all deploy, halt,
+breakpoint, step and print under F5.** The QT Py passed `link_test` 10/10 first try -- no new
+firmware bugs from a second RP2040 board.
+
+| Board | Chip | Firmware | Region | Used |
+|---|---|---|---|---|
+| Pico 2 | RP2350 | 354,800 | 1 MB | 33.8% |
+| Pico | RP2040 | 365,844 | **640 KB** | **55.8%** |
+| QT Py RP2040 | RP2040 | 363,612 | 1 MB | 34.7% |
+
+**RP2040 firmware is ~11 KB larger than RP2350's** -- Cortex-M0+ lacks the compact Thumb-2
+encodings the M33 has. **The plain Pico is the board to watch**: its 2 MB flash splits 1408 KB
+filesystem / 640 KB firmware, leaving ~274 KB free. The QT Py runs the same chip with half the
+pressure purely because it has 8 MB.
+
+**The debugger config is no longer per board.** It lives in `ports/rp2/mpdebug_board.h`, included
+once from `mpconfigport.h`, so every rp2 board gets the complete hook set; a board opts out with
+`MICROPY_HW_MPDEBUG 0`. Copying ~45 lines into three board files is precisely how the missing
+`MICROPY_DEBUG_INSTR_HOOK` happened (12.8), and three products make that mistake three times as
+likely. Moving it rebuilt the Pico 2 byte-identical, which is the check to repeat if it is redone.
+
+**A hook needs a call site, not just a definition -- this bit twice.** Each of these has three
+parts: an empty default in `py/mpconfig.h`, a definition in the board or port config, and **a
+call site in the port's own code**. Porting the first two and not the third leaves the macro
+defined and never invoked, and it fails silently:
+
+| Hook | Call site | Symptom when the call site is missing |
+|---|---|---|
+| `MICROPY_DEBUG_INSTR_HOOK` | `py/vm.c` (port-neutral) | halt and channel work; breakpoints never fire |
+| `MICROPY_DEBUG_STDOUT_HOOK` | the port's `mp_hal_stdout_tx_strn` | everything works; `print()` never reaches the Debug Console |
+
+**esp32 will need its own `MICROPY_DEBUG_STDOUT_HOOK` call site**, in its own stdout path. Check
+it explicitly rather than assuming the board config is enough.
+
+**Board USB identity is per board, not per chip family.** The QT Py overrides
+`MICROPY_HW_USB_VID/PID` to Adafruit's `239a:80f8`; many rp2 boards do the same. Every one needs
+an entry in `KNOWN_DEVICES` (`src/protocol.ts`) **and** a line in the udev rules, or the host
+cannot find it -- on Windows or Linux.
+
+**Two known gaps, neither a defect in the debugger:**
+
+- **Two boards sharing a VID/PID cannot be told apart.** Pico and Pico 2 are both `2e8a:0005`, so
+  with both attached `findPorts()` sees four matching ports and picks arbitrarily. Anyone with two
+  Pi boards on the desk hits this. The fix is to group ports by their parent USB device rather
+  than matching flat.
+- **A stale extension install is invisible.** The version stays `0.1.0` across rebuilds, so
+  `code --install-extension` silently skips unless given `--force`, and the resulting failure --
+  "No debug port found" -- is indistinguishable from a hardware fault. It cost a diagnosis cycle
+  here and would cost a customer a support ticket. Stamp a build id into the
+  "extension 0.1.0 (built ...)" line the Debug Console already prints.
+
+### 12.11 Building esp32 on Windows — seven obstacles, none of them the port
+
+**Stock `ESP32_GENERIC_S2` builds as of 2026-09-03**: `micropython.bin` 1,441,952 bytes, 29% of
+the app partition free. Getting there took seven fixes and **not one of them was in the
+debugger** -- they were all in the Windows build environment. Recorded so nobody pays twice.
+
+ESP-IDF **v5.4.0** at `~/esp/v5.4/esp-idf`. Build through `idf.py`, Ninja only.
+
+| # | Symptom | Actual cause | Fix |
+|---|---|---|---|
+| 1 | "ESP-IDF Python virtual environment not found" | export derives the venv name from whichever Python runs it; system Python is 3.14, the venv is `idf5.4_py3.11_env` | set `IDF_PYTHON_ENV_PATH`, put 3.11 first on `PATH` |
+| 2 | "The downloaded component espressif/tinyusb is corrupted" | MicroPython pulls tinyusb for s2/s3/p4 from a **git branch** and the manager hashes the checkout; Git for Windows sets `core.autocrlf=true` at **system** level, so every line ending is rewritten and the hash can never match | `git config --local core.autocrlf false` on the manager's cache repo (`%LOCALAPPDATA%/Espressif/ComponentManager/Cache/b_git_*`), then delete `managed_components` and `dependencies.lock` |
+| 3 | `WinError 206` from `makeqstrdefs.py` | the script builds its own preprocessor command; IDF's include list alone passes 32767 characters | response file for the compiler invocation |
+| 4 | `#include expects "FILENAME"`, `Wrong configuration file (ffconf.h)` | response files have their own quoting; `-DFFCONF_H="..."` lost its quotes | escape backslashes and quotes, wrap each argument |
+| 5 | ``sed: unterminated `s' command`` | `mkrules.cmake` built `qstrdefs.preprocessed.h` with a POSIX pipeline; Ninja runs custom commands through `cmd.exe` | rewrote it as `makeqstrdefs.py qstrdefs` -- no cat, no sed, no shell |
+| 6 | `Invalid value for '-G': 'Unix' is not 'Ninja'` | **ESP-IDF accepts no generator but Ninja**, so rp2's escape route does not exist here | see 5 -- the pipeline had to go |
+| 7 | `WinError 206` again, in the new step | fixed the command length at one call site and not the other | one shared `command_with_response_file()` helper |
+
+**Note the retry advice in obstacle 2 is actively wrong**: "please try running the command again"
+can never succeed, because the checkout is deterministic. And **do not fix it by changing global
+git config** -- that silently rewrites line endings for every other repository on the machine.
+
+**The `py/` patch set is now five fixes, one story: make MicroPython's CMake build work on
+Windows.** Response files for the qstr source list and flags (8191 limit); those files added to
+`DEPENDS`, or a changed list is silently ignored; the leaked `multiprocessing` pool, harmless on
+3.12 and fatal on 3.14; the preprocessor command via response file (32767 limit, unavoidable with
+IDF); and qstrdefs without a shell. **All are upstream bugs, not fork-specific**, and the last one
+matters most: it makes the build work under **Ninja on Windows**, the default generator for most
+CMake users, which was simply broken before.
+
+**Every one of these was verified not to change rp2's output** -- it rebuilt byte-identical
+(354,800) after each change. That is the check to repeat when touching shared build code.
+
+### 12.12 The ESP32-S2 boot loop — an IDF version mismatch, and how long it took to see
+
+**Root cause, 2026-09-04: ESP-IDF 5.4.0 instead of the 5.5.2 MicroPython v1.29 pins against.**
+Nothing to do with the debugger, the second CDC, `shared/tinyusb`, or the `py/` build patches.
+
+`ports/esp32/lockfiles/dependencies.lock.<target>` pins the managed-component set, and
+`CMakeLists.txt:66` points `DEPENDENCIES_LOCK` at it. That lockfile was resolved against **IDF
+5.5.2**. Built on 5.4.0, the resulting component set links **both** `libdriver.a` (legacy I2C)
+and `libesp_driver_i2c.a` (the new driver). IDF 5.4 ships a global constructor,
+`check_i2c_driver_conflict` (`components/driver/i2c/i2c.c:1719`), that calls `abort()` when it
+sees both -- **before `main()` runs**. The board boot-loops, never reaches MicroPython, and with
+the console on UART it says nothing at all.
+
+Note the README lists v5.4 among supported versions. It is not, at least for this lockfile:
+trust `lockfiles/dependencies.lock.*` over the prose.
+
+**Diagnosis, once there was a console:**
+
+```
+abort()
+  check_i2c_driver_conflict   components/driver/i2c/i2c.c:1719
+  do_global_ctors             components/esp_system/startup.c:104
+  start_cpu0_default
+```
+
+**Getting a console is the whole story.** ESP32_GENERIC_S2 puts the IDF console on UART0, which
+this board does not wire out, so a boot-looping app is indistinguishable from a dead one: no USB
+device, no output, and unlike rp2 not even a `VID_0000` entry to inspect. One build with
+
+```
+CONFIG_ESP_CONSOLE_USB_CDC=y
+CONFIG_ESP_CONSOLE_UART_DEFAULT=n
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+```
+
+put the log on native USB and answered in one flash what a dozen flashes of hypothesis had not.
+**Do this first on any board without a wired-out UART.**
+
+**What the wasted cycles looked like, so they are not repeated:**
+
+| Hypothesis | Test | Verdict |
+|---|---|---|
+| Two CDCs exhaust S2 endpoints | single-CDC build | wrong -- also failed |
+| tinyusb driven before init | `tusb_inited()` guard | wrong -- also failed (guard kept; it is a real latent hazard on both rp2 and esp32) |
+| Wrong board profile (UART REPL) | LOLIN_S2_MINI | wrong -- the official firmware *is* `ESP32_GENERIC_S2` and enumerates fine |
+| PSRAM mismatch | `CONFIG_SPIRAM_IGNORE_NOTFOUND` is set | wrong -- absence is tolerated |
+| Flash mode/size | header decode vs official | identical: DIO/80MHz/4MB |
+| Our bootloader or partition table | our app on the official bootloader | wrong -- partition tables byte-identical, still failed |
+
+**Two process failures, both mine.** First, I deleted `dependencies.lock` while chasing an
+unrelated component-hash error, which let the manager rewrite the *pinned* lockfile -- the thing
+that encodes which IDF version the component set belongs to. Second, the build printed
+`Checking lockfile contents...` followed by the diff on **every single run**, and I never saw it
+because I was filtering build output for `error:` and that line says `warning`.
+
+**The rule: on a new port, get a console before writing a line of port code, and read the
+warnings.** Compiling is not evidence that anything runs.
+
+### 12.13 ESP32-S2 works — three silicon families on one engine
+
+**2026-09-04: the full hardware suite passes on an ESP32-S2** (`ESP32_GENERIC_S2`, IDF 5.5.2):
+`link_test` 10/10, `expand`, `busyloop`, `deploy_speed`, `concurrent`. **`shared/mpdebug` still
+has not changed for any port** -- Cortex-M4, Cortex-M0+/M33 and Xtensa run the same engine.
+
+| | Stock | With debugger | Delta |
+|---|---|---|---|
+| app image | 1,441,952 | 1,509,440 | **+67,488** (26% of the partition still free) |
+
+Deploy throughput **24.2 KB/s** -- between SC13048's 5.3 and the Pico 2's 135.6.
+
+**Two real port bugs, both the same shape, both invisible on stm32 and rp2.** esp32 rolls its own
+idle loops for GIL and FreeRTOS reasons instead of funnelling through shared code, and **each one
+is a place the debug channel goes deaf**:
+
+| Idle path | Fix |
+|---|---|
+| `mp_hal_stdin_rx_chr` uses `MICROPY_EVENT_POLL_HOOK`, which esp32 defines itself and which never reaches `MICROPY_INTERNAL_EVENT_HOOK` | added the hook to both variants in `mpconfigport.h` |
+| `mp_hal_delay_ms` has its **own** loop, bypassing `MICROPY_EVENT_POLL_HOOK` entirely | added the hook to that loop |
+
+The second matters more than it looks: a typical program spends nearly all its life inside
+`time.sleep()`, so without it the debugger is unreachable except in the microseconds between
+sleeps. **This is why `link_test` passed while `expand`, `busyloop` and `concurrent` failed** --
+`link_test` does its work while the board is *halted*, where the halt loop pumps directly; the
+others attach to a *running* program.
+
+**Full parity with RP2, verified 2026-09-04.** Beyond the five suite tests: multi-file
+breakpoints (a module beside `main.py` and one in a subdirectory), a breakpoint **inside thread
+code** reached only from a spawned thread, threading with one stop event and the correct stack,
+`print()` forwarded to the Debug Console, halting at an uncaught exception (`reason=3` at the
+raise point with the frame chain intact), and **F5 from VS Code**. Nothing on the RP2 list is
+missing.
+
+Still open, both product rather than correctness: the board is built as `ESP32_GENERIC_S2` rather
+than a QT Py ESP32-S2 definition of its own (pin map, LED, USB identity), and the extension still
+identifies itself as SITCore.
+
+**The porting rule this establishes.** Three hooks need a **port-side call site**, and a missing
+one always fails silently and differently:
+
+| Hook | Call site | Symptom when missing |
+|---|---|---|
+| `MICROPY_DEBUG_INSTR_HOOK` | `py/vm.c` (port-neutral) | halt and channel work; breakpoints never fire |
+| `MICROPY_DEBUG_STDOUT_HOOK` | the port's `mp_hal_stdout_tx_strn` | everything works; `print()` never reaches the Debug Console |
+| `MICROPY_INTERNAL_EVENT_HOOK` | **every** idle loop the port owns | channel dead whenever no bytecode runs |
+
+**On a new port, verify each of the three actually fires -- do not just check it is defined.**
+Grep the port for its own idle loops (`mp_hal_delay_*`, `mp_hal_stdin_rx_chr`, any bespoke
+`EVENT_POLL_HOOK`) and confirm the pump is reached from each.
+

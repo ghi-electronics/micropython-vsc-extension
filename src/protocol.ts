@@ -127,6 +127,9 @@ export const KNOWN_DEVICES: KnownDevice[] = [
     { vid: 0x1b9f, pid: 0xf105, name: "SITCore SC13xxx" },
     { vid: 0x2e8a, pid: 0x0005, name: "Raspberry Pi Pico / Pico 2" },
     { vid: 0x239a, pid: 0x80f8, name: "Adafruit QT Py RP2040" },
+    // esp32 computes its PID from a CFG_TUD_* bitmap, so two CDCs yields 0x4002
+    // where stock (one CDC) is 0x4001 -- a distinct identity for free.
+    { vid: 0x303a, pid: 0x4002, name: "ESP32-S2 / S3 (dual CDC)" },
 ];
 
 /**
