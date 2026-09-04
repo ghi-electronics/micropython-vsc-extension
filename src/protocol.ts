@@ -126,6 +126,7 @@ export interface KnownDevice { vid: number; pid: number; name: string; }
 export const KNOWN_DEVICES: KnownDevice[] = [
     { vid: 0x1b9f, pid: 0xf105, name: "SITCore SC13xxx" },
     { vid: 0x2e8a, pid: 0x0005, name: "Raspberry Pi Pico / Pico 2" },
+    { vid: 0x239a, pid: 0x80f8, name: "Adafruit QT Py RP2040" },
 ];
 
 /**

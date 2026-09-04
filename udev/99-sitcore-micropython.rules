@@ -30,3 +30,8 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="1b9f", ATTRS{idProduct}=="f105", MODE="0666"
 # deliberate (see 12.2): stock presents one CDC and simply has no debug
 # channel, so matching it here costs nothing and keeps the board a drop-in.
 SUBSYSTEM=="tty", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="0005", MODE="0666", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+
+# Adafruit QT Py RP2040.  Boards that carry their own USB identity need their
+# own line -- many rp2 boards override MICROPY_HW_USB_VID/PID, so this list
+# grows with the supported-board list rather than by chip family.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="239a", ATTRS{idProduct}=="80f8", MODE="0666", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"

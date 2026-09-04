@@ -1189,7 +1189,48 @@ What is actually broken, all demonstrated rather than predicted:
 5. A thread blocked in a syscall rather than executing bytecode never reaches the check and so
    never stops -- the one case where 12.3's original description does hold.
 
-**Revised shape of the work** (12.3's decisions -- all-stop, one debug owner, read-only
+**FIXED 2026-09-03, and verified on a Pico 2.** One thread owns a stop; the rest park
+silently. `mp_debug_claim_halt()` does an atomic test-and-set of the owner inside
+`MICROPY_BEGIN_ATOMIC_SECTION()` -- atomic because rp2 has no GIL and both cores reach it at
+once -- and returns true as well when a thread re-enters its own halt, which the evaluation path
+does. All four halt sites claim first: pause, step, breakpoint and uncaught exception. A thread
+that loses the claim touches nothing at all: no stop event, no frame pointer, and above all it
+never enters the pump, which is what had two cores inside tinyusb together.
+
+| | before | after |
+|---|---|---|
+| stopped events per stop | **2** | **1** |
+| stack reported | `[worker() at 11]` -- the wrong thread | `[step() at 16, <module>() at 23]` |
+| other thread while halted | stopped | stopped |
+
+Three runs, identical results -- the old behaviour was non-deterministic, so repetition is the
+test. **Cost: +120 bytes on rp2, +112 on SC13048.** The whole hardware suite still passes on both.
+
+Note what was **not** needed: no `multicore_lockout`, no park handshake. 12.3 assumed those
+because it expected the other thread to keep running. It does not -- it halts on the same global
+-- so the fix is about forty lines rather than the week 12.3 estimated.
+
+**A real threaded, multi-file project works** -- verified on a Pico 2 by
+`test/project_test.js`, which deploys `main.py`, a `worklib.py` beside it, and a
+`helpers/mathy.py` in a subdirectory, with a worker thread running code from the subdirectory
+module:
+
+```
+worklib.py:2 (main thread)          hit -> worklib.py:2 tick()  <-  main.py:19 <module>()
+helpers/mathy.py:2 (worker thread)  hit -> helpers/mathy.py:2 scale()  <-  main.py:11 spin()
+```
+
+The second is the one that matters: **a breakpoint inside thread code hits, and the stack shows
+the thread's own frames**, headed by its entry function. Breakpoints are not confined to the main
+thread, and not confined to `main.py`.
+
+**Still open: visibility, not correctness.** `Thread_List` reports 1, and the host cannot name or
+select the second thread in VS Code's Threads panel. That needs a thread id in
+`Execution_Stopped`, `Thread_Stack` and `Value_GetScope`, which is a protocol bump and host work.
+A user debugging threaded code today gets correct answers about the thread that stopped, and no
+way to look at the other one.
+
+**Revised shape of the remaining work** (12.3's decisions -- all-stop, one debug owner, read-only
 inspection of other threads -- all still stand):
 
 - Elect one halt owner; the others park without sending an event or touching the handle table.
