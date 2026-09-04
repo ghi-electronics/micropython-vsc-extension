@@ -119,8 +119,8 @@ export class MicroPythonDebugSession extends DebugSession {
             const devicePort = args.device || ports.debug;
             if (!devicePort) {
                 throw new Error(
-                    "No SITCore debug port found. The board must be running MicroPython "
-                    + "with two CDC interfaces (VCP+VCP).");
+                    "No debug port found. The board must be running this MicroPython "
+                    + "firmware, which presents a second CDC interface for the debugger.");
             }
             await this.link.open(devicePort);
             this.attachEvents();

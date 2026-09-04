@@ -86,12 +86,12 @@ async function showDevices(): Promise<void> {
     const ports = await findPorts();
     if (!ports.debug) {
         void vscode.window.showWarningMessage(
-            "No SITCore debug port found. The board must be running MicroPython "
-            + "with two CDC interfaces (VCP+VCP).");
+            "No debug port found. The board must be running this MicroPython "
+            + "firmware, which presents a second CDC interface for the debugger.");
         return;
     }
     void vscode.window.showInformationMessage(
-        `SITCore debug channel on ${ports.debug}`
+        `Debug channel on ${ports.debug}`
         + (ports.repl ? `, REPL on ${ports.repl}` : ""));
 }
 
@@ -113,7 +113,7 @@ async function withDevice<T>(fn: (link: DeviceLink) => Promise<T>): Promise<T | 
     const ports = await findPorts();
     if (!ports.debug) {
         void vscode.window.showErrorMessage(
-            "No SITCore debug port found. The board must be in VCP+VCP mode.");
+            "No debug port found. The board must be running this MicroPython firmware.");
         return undefined;
     }
     const link = new DeviceLink();
@@ -196,20 +196,19 @@ async function eraseDevice(): Promise<void> {
     });
 }
 
+// Deliberately free of board-specific modules: a new project must run on every
+// board this debugger supports, and a template that raises ImportError on the
+// user's first F5 is the worst possible introduction.
 const SAMPLE_MAIN = [
-    "# MicroPython on SITCore.",
+    "# MicroPython.",
     "#",
     "# Press F5 to deploy this to the board and start debugging.",
     "# Click in the gutter beside a line number to set a breakpoint.",
     "",
-    "import pyb",
     "import time",
-    "",
-    "led = pyb.LED(1)",
     "",
     "",
     "def blink(count):",
-    "    led.toggle()",
     "    total = count + 1",
     "    return total",
     "",

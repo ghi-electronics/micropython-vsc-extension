@@ -1,4 +1,9 @@
-# GHI Electronics SITCore running MicroPython, dual CDC (VCP+VCP).
+# Boards running this MicroPython debugger firmware, which presents a second
+# CDC interface for the debug channel.
+#
+# One line per supported board.  Keep this in step with KNOWN_DEVICES in
+# src/protocol.ts: a board the extension can find on Windows but cannot open on
+# Linux is the same failure to the user, and harder to diagnose.
 #
 # Install with:
 #     sudo cp 99-sitcore-micropython.rules /etc/udev/rules.d/
@@ -18,4 +23,10 @@
 #      fails or behaves strangely, then recovers, which is a miserable thing to
 #      diagnose. ID_MM_DEVICE_IGNORE tells it to leave this device alone.
 
+# GHI Electronics SITCore SC13xxx, dual CDC (VCP+VCP)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1b9f", ATTRS{idProduct}=="f105", MODE="0666", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+
+# Raspberry Pi Pico / Pico 2.  Same VID/PID as stock MicroPython, which is
+# deliberate (see 12.2): stock presents one CDC and simply has no debug
+# channel, so matching it here costs nothing and keeps the board a drop-in.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="0005", MODE="0666", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"

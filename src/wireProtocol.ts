@@ -1,7 +1,7 @@
 /**
  * Message framing for the debug channel.
  *
- * Direct counterpart of ports/stm32/mpdebug/wireprotocol.c. The two ends must
+ * Direct counterpart of shared/mpdebug/wireprotocol.c. The two ends must
  * agree byte for byte, so the CRC and the header layout are reproduced exactly
  * rather than approximated.
  */

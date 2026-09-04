@@ -95,8 +95,8 @@ export async function openDeviceShell(existing?: vscode.Terminal): Promise<vscod
     if (!ports.repl) {
         void vscode.window.showErrorMessage(
             ports.debug
-                ? "Found the debug port but not the REPL port. The board must be in VCP+VCP mode."
-                : "No SITCore device found.");
+                ? "Found the debug port but not the REPL port."
+                : "No supported device found.");
         return undefined;
     }
 

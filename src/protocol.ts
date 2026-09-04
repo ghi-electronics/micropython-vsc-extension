@@ -1,7 +1,7 @@
 /**
  * Wire protocol constants for the MicroPython debug engine.
  *
- * These mirror ports/stm32/mpdebug/micropython_debugging.h in the firmware.
+ * These mirror shared/mpdebug/micropython_debugging.h in the firmware.
  * Any change here must be made there too -- the two are a single contract.
  */
 

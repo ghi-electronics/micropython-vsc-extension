@@ -1154,6 +1154,54 @@ thread id, and a `Thread_List` command is needed for DAP `threads`. On the host,
 `allThreadsStopped`. Implementation lands with the Pico 2 port — 12.4 — not before.
 
 
+### 12.3a Measured on hardware 2026-09-03 — 12.3's premise was wrong
+
+Before building the stop model, `test/threads_test.js` measured what actually happens on a
+Pico 2 running a program with a `_thread` worker. **12.3 says "the halt loop spins in one
+context, so other threads would keep running while stopped". That is not what happens.**
+
+A counter incremented only by the worker thread did not move while the debugger was halted, and
+the host received **two** stopped events:
+
+```
+[0] reason=0 (breakpoint)  line=16   <- core 0, step()
+[1] reason=1 (pause)       line=11   <- core 1, worker()
+```
+
+**Why: the pause check is global.** `mp_debug_instr_tick()` opens with
+`if (mp_debug_conditions & MP_DBG_COND_STOPPED)`, and `mp_debug_conditions` is one global. So the
+moment core 0 halts and sets STOPPED, core 1 sees it at its next bytecode and halts as well.
+**All-stop already happens** for any thread executing bytecode -- by accident, not by design.
+
+That is good news: the work is not to build all-stop but to make the existing one coordinated.
+What is actually broken, all demonstrated rather than predicted:
+
+1. **The reported stack is the wrong thread's.** `mp_debug_hit_code_state` is a single global and
+   the second core to halt overwrites it. Two runs of the same test gave
+   `[step() at 16, <module>() at 23]` and `[worker() at 11]` for the identical stop --
+   non-deterministic, and the host has no way to tell.
+2. **Duplicate stop events.** The host is told the program stopped twice, once per thread. VS Code
+   would show a stop at the breakpoint and then a second, unexplained one.
+3. **Both cores run the halt loop, and both call `mp_usbd_task()`.** This is the tinyusb SMP
+   hazard 12.3 warns about, reached by a different route than expected -- not one core pumping
+   while another runs, but two cores pumping at once. Latent transport corruption.
+4. **`Thread_List` reports 1** while two threads exist, so the host cannot even name them.
+5. A thread blocked in a syscall rather than executing bytecode never reaches the check and so
+   never stops -- the one case where 12.3's original description does hold.
+
+**Revised shape of the work** (12.3's decisions -- all-stop, one debug owner, read-only
+inspection of other threads -- all still stand):
+
+- Elect one halt owner; the others park without sending an event or touching the handle table.
+- Make `mp_debug_hit_code_state` per-thread, keyed off `core_state[]`.
+- Only the owner pumps the transport. This removes the SMP hazard without needing
+  `multicore_lockout` at all in the common case.
+- Report real threads in `Thread_List`, and tag stop events with a thread id.
+
+The park handshake and lockout escalation in 12.3 remain the answer for a thread that is **not**
+executing bytecode; they are no longer needed for the common case, which is a considerably
+smaller job than 12.3 assumed.
+
 ### 12.4 Order of work
 
 Revised 2026-09-03 for the three-board scope in the section 12 intro.
@@ -1503,4 +1551,39 @@ every run, so re-enumeration behaviour is a first-class user experience concern 
 in the test matrix. Note the board declares stock MicroPython's `USBD_MAX_POWER_MA (250)`,
 untouched: a hub that cannot keep this board attached across a reset cannot keep stock
 MicroPython attached either.
+
+### 12.9 F5 works on the Pico 2 — and what only F5 could have found
+
+**Verified 2026-09-03: F5 from VS Code deploys, halts, breakpoints, steps and prints on a
+Pico 2**, the same as on SC13xxx. That is the product bar met on a second silicon family.
+
+Everything before this drove the transport directly from `node test/*.js`, on Windows. Two
+defects survived all of it, because no test exercised the path a real user takes:
+
+1. **`MicroPython: New Project` wrote a `main.py` containing `import pyb`.** A user's very first
+   F5 on a Pico 2 or ESP32 would fail — on a file the extension itself generated. The template is
+   now board-neutral, as is `examples/blink/main.py`, which had the same problem and is what the
+   sample instructions tell people to open.
+
+2. **The Linux udev rule matched SITCore's VID/PID only.** On Linux a Pico 2 would hit both
+   problems that file exists to solve: `/dev/ttyACM*` owned by `root:dialout` with the desktop
+   user not in the group, and ModemManager sending AT commands at the debug channel for several
+   seconds after plug-in. Both present as "the extension cannot find or open the board". Now one
+   rule per board, with a note to keep it in step with `KNOWN_DEVICES` in `src/protocol.ts` —
+   **a board the extension can find on Windows but cannot open on Linux is the same failure to
+   the user, and harder to diagnose.**
+
+Also corrected: user-facing messages said "No SITCore debug port found. The board must be in
+VCP+VCP mode." VCP+VCP is SITCore's MODE-pin concept and means nothing on a Pico or ESP32.
+
+**Left alone deliberately — a decision, not an oversight.** The extension is still
+`micropython-sitcore-debug` / "MicroPython for SITCore", with `micropython-sitcore.*` command ids
+and a "MicroPython SITCore" output channel. Renaming the extension id breaks existing installs
+and marketplace identity, so it is a product decision, not a refactor. It needs making before
+this ships supporting Pico 2 and ESP32-S2.
+
+**The lesson for the remaining ports.** Both defects were in code no automated test touches and
+that only a human pressing F5 on the target board would meet. When SC20xxx and the ESP32-S2 come
+up, run F5 by hand on each before calling the port done — the hardware suite passing is necessary
+and not sufficient.
 
