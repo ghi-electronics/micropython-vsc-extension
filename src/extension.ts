@@ -15,10 +15,10 @@ import { openDeviceShell } from "./replTerminal";
 import { updateFirmware, flashFromFile } from "./firmware/updateFirmware";
 import { offerFirmwareInstall } from "./firmware/notInstalled";
 
-const output = vscode.window.createOutputChannel("MicroPython SITCore");
+const output = vscode.window.createOutputChannel("MicroPython Debugger");
 
 export function activate(context: vscode.ExtensionContext): void {
-    output.appendLine("MicroPython SITCore extension activated");
+    output.appendLine("MicroPython Debugger extension activated");
     context.subscriptions.push(output);
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory(
@@ -26,23 +26,23 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.debug.registerDebugConfigurationProvider(
             "micropython", new ConfigProvider()),
         vscode.commands.registerCommand(
-            "micropython-sitcore.selectDevice", showDevices),
+            "micropython-debugger.selectDevice", showDevices),
         vscode.commands.registerCommand(
-            "micropython-sitcore.openShell", () => { void openShell(); }),
+            "micropython-debugger.openShell", () => { void openShell(); }),
         vscode.commands.registerCommand(
-            "micropython-sitcore.deviceInfo", () => { void showDeviceInfo(); }),
+            "micropython-debugger.deviceInfo", () => { void showDeviceInfo(); }),
         vscode.commands.registerCommand(
-            "micropython-sitcore.eraseDevice", () => { void eraseDevice(); }),
+            "micropython-debugger.eraseDevice", () => { void eraseDevice(); }),
         vscode.commands.registerCommand(
-            "micropython-sitcore.newProject", () => { void newProject(); }),
+            "micropython-debugger.newProject", () => { void newProject(); }),
         vscode.commands.registerCommand(
-            "micropython-sitcore.updateFirmware",
+            "micropython-debugger.updateFirmware",
             // Returns its result: the firmware-install offer needs to know
             // whether the index was simply unreachable, so it can suggest a
             // local file rather than leaving the user with nowhere to go.
             () => updateFirmware(context, output)),
         vscode.commands.registerCommand(
-            "micropython-sitcore.flashFromFile",
+            "micropython-debugger.flashFromFile",
             () => { void flashFromFile(context, output); }),
         // After a session that ran without a launch.json, offer to save one --
         // F5 works without it, but only after choosing from the debugger list

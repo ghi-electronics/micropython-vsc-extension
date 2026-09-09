@@ -84,7 +84,7 @@ export async function offerFirmwareInstall(): Promise<string | undefined> {
     }
 
     const result = await vscode.commands.executeCommand<UpdateResult>(
-        "micropython-sitcore.updateFirmware");
+        "micropython-debugger.updateFirmware");
 
     if (result === "flashed") {
         return waitForBoard();
@@ -108,6 +108,6 @@ export async function offerFirmwareInstall(): Promise<string | undefined> {
         return undefined;
     }
 
-    await vscode.commands.executeCommand("micropython-sitcore.flashFromFile");
+    await vscode.commands.executeCommand("micropython-debugger.flashFromFile");
     return waitForBoard();
 }

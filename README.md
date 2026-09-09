@@ -1,4 +1,4 @@
-# MicroPython for SITCore
+# MicroPython Debugger
 
 **Real source-level debugging for MicroPython, on real hardware, over one USB cable.**
 
@@ -6,19 +6,22 @@ Set a breakpoint in the gutter. Press F5. Your code deploys, the board restarts,
 execution stops on that line — with the call stack, your variables, and a working
 Watch window. No JTAG, no debug probe, no wiring.
 
-Proper debugging has always come with SITCore: run TinyCLR and you write C# and debug
-it in Visual Studio. This puts MicroPython on the same footing — breakpoints, stepping,
-call stack and variables, in VS Code, on the same board and the same cable.
-
-Pick the language that suits the job. A board runs MicroPython **or** TinyCLR, never
-both.
+**F5, F10, F11, Shift+F11, restart, stop — the debugger you already know, driving a
+microcontroller.** Not a print-and-guess loop, and not a simulator: the real chip, halted
+on the real line, with the real values in scope.
 
 ## What you get
 
 | | |
 |---|---|
 | **Breakpoints** | Conditional, with hit counts. Anywhere, including inside imported modules. |
-| **Stepping** | Step over, into, out of. Pause a running program. |
+| **Step over (F10)** | Run the next line without descending into it. |
+| **Step into (F11)** | Follow the call, including into another file. |
+| **Step out (Shift+F11)** | Finish the function and stop at the caller. |
+| **Continue (F5)** | Run on to the next breakpoint. |
+| **Pause** | Interrupt a running program and see where it is. |
+| **Restart (Ctrl+Shift+F5)** | Redeploy and start again from the top. |
+| **Stop (Shift+F5)** | End the session and leave the board running. |
 | **Call stack** | Every frame, with file and line, click to open. |
 | **Variables** | Locals *and* globals. Expand lists, dicts and objects, nested. |
 | **Watch & hover** | Evaluate any expression in the stopped frame. Hover a name to see its value. |
@@ -30,9 +33,9 @@ both.
 
 ## Getting started
 
-1. Flash the SITCore MicroPython firmware.
+1. Flash the [MicroPython firmware](https://www.ghielectronics.com).
 2. Open a folder containing a `.py` file.
-3. Press **F5**, and pick *MicroPython (SITCore, USB)*.
+3. Press **F5**, and pick *MicroPython*.
 
 That is the whole setup — no `launch.json`, no project file, no Python environment. The
 extension offers to save a launch configuration afterwards so F5 stops asking.
@@ -44,6 +47,8 @@ Starting from an empty folder? **MicroPython: New Project** writes a sample `mai
 
 | Command | What it does |
 |---|---|
+| MicroPython: Update Device Firmware | Downloads the right firmware and installs it |
+| MicroPython: Flash Firmware from File… | Installs a firmware file you already have |
 | MicroPython: Open Device Shell (REPL) | Live program output; Ctrl-C stops the program for a `>>>` prompt |
 | MicroPython: Device Info | Firmware protocol version, limits, filesystem usage |
 | MicroPython: Erase Deployed Files | Removes deployed `.py` and `.mpy`, keeps `boot.py` |
@@ -75,7 +80,8 @@ Data files are deployed only if you list them, since the filesystem is small:
   halts execution; a `try` that would handle it suppresses the stop.
 - **`@micropython.native` and `@micropython.viper` cannot be debugged.** They emit no
   trace events, so breakpoints inside them never fire. The code still runs correctly.
-- **Single-threaded.** `_thread` is not enabled on SC13xxx.
+- **Threads stop together.** On a board with `_thread`, hitting a breakpoint halts every
+  thread, and the stopped frame shown is the one that hit it.
 - **The `>>>` prompt needs the program to stop.** MicroPython runs `main.py` to
   completion before starting the REPL, so a program with a loop in it means nothing is
   listening for what you type. Output still appears; Ctrl-C gets you a prompt.
@@ -84,69 +90,22 @@ Data files are deployed only if you list them, since the filesystem is small:
 
 ## Requirements
 
-- A SITCore device running the MicroPython firmware from the companion fork
+- A device running the [MicroPython firmware](https://www.ghielectronics.com) supported
+  by GHI Electronics
 - VS Code 1.85 or newer
 
-Windows, Linux and macOS are all supported. The one native dependency ships prebuilt for
-every platform inside the `.vsix`, so there is nothing to compile and no toolchain to
-install.
+Windows, Linux and macOS are all supported, and everything needed ships inside the
+extension — nothing to compile, no toolchain, no Python.
 
-### Windows
-
-Nothing to set up. Windows 10 and later install the USB serial driver automatically.
-
-### Linux
+### Linux only
 
 Install the udev rule once, then replug the board:
 
 ```
-sudo cp udev/99-sitcore-micropython.rules /etc/udev/rules.d/
+sudo cp udev/99-micropython-debugger.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
-This does two things, and skipping it causes symptoms that look like extension bugs. It
-grants your user access to the port — otherwise opening it fails with "permission
-denied", because `/dev/ttyACM*` belongs to the `dialout` group. And it stops ModemManager
-probing the debug channel with AT commands for several seconds after every plug-in.
-
-Without the rule, the fallback for permissions alone is `sudo usermod -a -G dialout
-$USER`, then log out and back in.
-
-### macOS
-
-Nothing to set up; the CDC driver is part of the OS.
-
-## How it fits together
-
-| Layer | Where |
-|---|---|
-| VS Code extension + debug adapter | this repository |
-| Debug engine (C) | `ports/stm32/mpdebug/` in the firmware fork |
-
-The debug adapter runs in-process, so there is no separate server to install and no .NET
-or Python dependency.
-
-## Building
-
-Windows is the build host:
-
-```
-build-extension.bat            compile to the out directory
-build-extension.bat package    compile, then produce an installable .vsix
-```
-
-The package is named for the version in `package.json`, so a `.vsix` on disk says which
-build it is: `micropython-sitcore-debug_v0.1.0.vsix`.
-
-One `.vsix` built on Windows installs on Windows, Linux and macOS.
-
-Or directly:
-
-```
-npm install
-npm run compile
-node test/findports_test.js    # no hardware needed
-node test/link_test.js         # drives a real board, no VS Code needed
-```
-
-Press F5 in VS Code to launch an Extension Development Host.
+Without it the board cannot be opened: `/dev/ttyACM*` belongs to the `dialout` group, and
+ModemManager probes the debug channel for several seconds after every plug-in. Windows
+and macOS need nothing.

@@ -131,7 +131,7 @@ const INDEX_TIMEOUT_MS = 20_000;
 const MANIFEST_CACHE = "micropython_firmware.json";
 
 function manifestUrl(): string {
-    const cfg = vscode.workspace.getConfiguration("micropython-sitcore");
+    const cfg = vscode.workspace.getConfiguration("micropython-debugger");
     const raw = cfg.get<string>("firmwareManifestUrl", "").trim();
     // Two or more characters before the colon, so that a Windows drive letter
     // ("C:/firmware.json") is read as a path and not as a URL scheme named "c".
@@ -230,7 +230,7 @@ export async function loadManifest(
     const url = manifestUrl();
     if (url === "") {
         throw new Error(
-            "No firmware index configured. Set 'micropython-sitcore.firmwareManifestUrl' " +
+            "No firmware index configured. Set 'micropython-debugger.firmwareManifestUrl' " +
             "in settings, or use 'Flash Firmware from File' with a local build.");
     }
 

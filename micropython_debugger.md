@@ -1020,7 +1020,7 @@ Beyond the debugger itself, all verified on hardware except where noted:
   successful run, because otherwise VS Code asks which debugger every time -- and that list
   includes debuggers that will run the file on the PC instead of the board.
 - **Packaging:** icon, marketplace metadata, and `build-extension.bat package` stamps the
-  version into the filename (`micropython-sitcore-debug_v0.1.0.vsix`).
+  version into the filename (`micropython-debugger_v0.1.0.vsix`).
 
 **Device console caveat, learned the hard way:** MicroPython runs `main.py` to completion
 before starting the REPL (`ports/stm32/main.c:721`), so with a looping program there is no
@@ -1624,7 +1624,7 @@ Also corrected: user-facing messages said "No SITCore debug port found. The boar
 VCP+VCP mode." VCP+VCP is SITCore's MODE-pin concept and means nothing on a Pico or ESP32.
 
 **Left alone deliberately — a decision, not an oversight.** The extension is still
-`micropython-sitcore-debug` / "MicroPython for SITCore", with `micropython-sitcore.*` command ids
+`micropython-debugger` / "MicroPython Debugger", publisher `GHI-Electronics`, with `micropython-debugger.*` command ids
 and a "MicroPython SITCore" output channel. Renaming the extension id breaks existing installs
 and marketplace identity, so it is a product decision, not a refactor. It needs making before
 this ships supporting Pico 2 and ESP32-S2.

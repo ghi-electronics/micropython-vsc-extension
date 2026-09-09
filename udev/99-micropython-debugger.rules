@@ -6,7 +6,7 @@
 # Linux is the same failure to the user, and harder to diagnose.
 #
 # Install with:
-#     sudo cp 99-sitcore-micropython.rules /etc/udev/rules.d/
+#     sudo cp 99-micropython-debugger.rules /etc/udev/rules.d/
 #     sudo udevadm control --reload-rules && sudo udevadm trigger
 #
 # Two problems this solves, both of which look like "the extension cannot find

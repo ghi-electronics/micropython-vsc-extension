@@ -1,5 +1,5 @@
 @echo off
-REM Build the MicroPython SITCore VS Code extension on Windows.
+REM Build the MicroPython Debugger VS Code extension on Windows.
 REM
 REM   build-extension.bat            compile TypeScript to out\
 REM   build-extension.bat package    compile, then produce an installable .vsix
@@ -41,7 +41,7 @@ if /i "%~1"=="package" (
         echo ERROR: could not read the version from package.json.
         exit /b 1
     )
-    set "VSIX=micropython-sitcore-debug_v!VER!.vsix"
+    set "VSIX=micropython-debugger_v!VER!.vsix"
     echo ==^> packaging !VSIX!
     REM Fetched on demand rather than pinned as a devDependency: packaging is a
     REM release step, not something every build needs installed for.

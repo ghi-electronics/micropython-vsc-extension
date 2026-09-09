@@ -6,3 +6,15 @@ examples/**
 **/*.map
 tsconfig.json
 .gitignore
+
+# Internal material -- a .vsix is a zip, so anything listed here would be
+# readable by every customer who installs the extension.
+micropython_debugger.md
+tools/**
+build-extension.bat
+install_vsix.bat
+*.vsix
+
+# Generated at release time and fetched from the website at run time; a stale
+# copy bundled here would only ever be misleading.
+micropython_firmware.json
