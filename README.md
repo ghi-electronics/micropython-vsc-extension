@@ -109,3 +109,13 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 Without it the board cannot be opened: `/dev/ttyACM*` belongs to the `dialout` group, and
 ModemManager probes the debug channel for several seconds after every plug-in. Windows
 and macOS need nothing.
+
+---
+
+Copyright &copy; 2026 GHI Electronics, LLC.
+
+| | |
+|---|---|
+| Website | [www.ghielectronics.com](https://www.ghielectronics.com) |
+| Support | [support@ghielectronics.com](mailto:support@ghielectronics.com) |
+| Forum | [forums.ghielectronics.com](https://forums.ghielectronics.com/) |

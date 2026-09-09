@@ -5,6 +5,11 @@
   "description": "Source-level MicroPython debugging over USB.",
   "publisher": "GHI-Electronics",
   "license": "MIT",
+  "homepage": "https://www.ghielectronics.com",
+  "bugs": {
+    "url": "https://forums.ghielectronics.com/",
+    "email": "support@ghielectronics.com"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/ghi-electronics/micropython-vsc-extension.git"
