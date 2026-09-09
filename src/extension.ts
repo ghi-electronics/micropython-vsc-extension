@@ -127,8 +127,9 @@ async function withDevice<T>(fn: (link: DeviceLink) => Promise<T>): Promise<T | 
         debugPort = await offerFirmwareInstall();
     }
     if (!debugPort) {
-        void vscode.window.showErrorMessage(
-            "No debug port found. The board must be running this MicroPython firmware.");
+        // The install offer above has already had the conversation: the user
+        // declined, or the updater reported its own failure.  Adding an error
+        // here would be answering "no" with a complaint.
         return undefined;
     }
     const link = new DeviceLink();

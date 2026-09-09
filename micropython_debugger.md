@@ -1020,7 +1020,7 @@ Beyond the debugger itself, all verified on hardware except where noted:
   successful run, because otherwise VS Code asks which debugger every time -- and that list
   includes debuggers that will run the file on the PC instead of the board.
 - **Packaging:** icon, marketplace metadata, and `build-extension.bat package` stamps the
-  version into the filename (`micropython-debugger_v0.1.0.vsix`).
+  version into the filename (`GHI-Electronics.micropython-debugger-0.1.0.vsix`).
 
 **Device console caveat, learned the hard way:** MicroPython runs `main.py` to completion
 before starting the REPL (`ports/stm32/main.c:721`), so with a looping program there is no

@@ -142,9 +142,14 @@ export class MicroPythonDebugSession extends DebugSession {
                 devicePort = await offerFirmwareInstall();
             }
             if (!devicePort) {
-                throw new Error(
-                    "No debug port found. The board must be running this MicroPython "
-                    + "firmware, which presents a second CDC interface for the debugger.");
+                // The offer above is the last thing that happens here, and by
+                // now the user has already had their say: they declined, or the
+                // updater reported its own failure.  Raising an error on top of
+                // that answers "no" with a complaint -- so the session simply
+                // ends, with nothing further to dismiss.
+                this.sendResponse(response);
+                this.sendEvent(new TerminatedEvent());
+                return;
             }
             await this.link.open(devicePort);
             this.attachEvents();

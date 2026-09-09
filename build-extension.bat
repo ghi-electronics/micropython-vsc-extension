@@ -30,18 +30,21 @@ call npm run compile
 if errorlevel 1 exit /b 1
 
 if /i "%~1"=="package" (
-    REM Stamp the package with the version from package.json, so a .vsix on
-    REM disk says which build it is. Read via a temp file rather than a for/f
-    REM capture, which is easy to get subtly wrong with quoting.
-    call node -p "require('./package.json').version" > "%TEMP%\mpy_vsix_ver.txt"
-    set "VER="
-    if exist "%TEMP%\mpy_vsix_ver.txt" set /p VER=<"%TEMP%\mpy_vsix_ver.txt"
-    del "%TEMP%\mpy_vsix_ver.txt" >nul 2>&1
-    if not defined VER (
-        echo ERROR: could not read the version from package.json.
+    REM Name the package exactly as the Marketplace names its downloads:
+    REM   <publisher>.<name>-<version>.vsix
+    REM so a file built here and one downloaded from the Marketplace are
+    REM indistinguishable. Every part comes from package.json, so the name can
+    REM never drift from the identity it claims. Read via a temp file rather
+    REM than a for/f capture, which is easy to get subtly wrong with quoting.
+    call node -p "var p=require('./package.json');p.publisher+'.'+p.name+'-'+p.version" > "%TEMP%\mpy_vsix_id.txt"
+    set "VSIXID="
+    if exist "%TEMP%\mpy_vsix_id.txt" set /p VSIXID=<"%TEMP%\mpy_vsix_id.txt"
+    del "%TEMP%\mpy_vsix_id.txt" >nul 2>&1
+    if not defined VSIXID (
+        echo ERROR: could not read the identity from package.json.
         exit /b 1
     )
-    set "VSIX=micropython-debugger_v!VER!.vsix"
+    set "VSIX=!VSIXID!.vsix"
     echo ==^> packaging !VSIX!
     REM Fetched on demand rather than pinned as a devDependency: packaging is a
     REM release step, not something every build needs installed for.
