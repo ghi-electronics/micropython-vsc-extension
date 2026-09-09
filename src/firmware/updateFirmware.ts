@@ -23,7 +23,7 @@ import * as fs from "fs/promises";
 import type { BootBoard } from "./boards";
 import { detectBootloaders, waitForBootloader, type DetectedBoot } from "./detect";
 import { writeUf2 } from "./drives";
-import { flashEsp } from "./espFlash";
+import { EspNotRespondingError, flashEsp, probeEspChip } from "./espFlash";
 import {
     downloadFirmware, loadManifest, md5, parseHexId,
     type FirmwareFamily, type Manifest,
@@ -39,7 +39,9 @@ const LAST_BOARD_KEY = "firmware.lastBoardId";
  * modal would have to be dismissed by hand after the board appears, which is
  * exactly the friction this command exists to remove.
  */
-async function promptForBootloader(): Promise<DetectedBoot[] | undefined> {
+async function promptForBootloader(
+    verify: (board: DetectedBoot) => Promise<boolean>,
+): Promise<DetectedBoot[] | undefined> {
     const result = await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -50,7 +52,7 @@ async function promptForBootloader(): Promise<DetectedBoot[] | undefined> {
             progress.report({
                 message: "Hold the BOOT button (LDR on SITCore) and tap RESET, then release BOOT.",
             });
-            return waitForBootloader(() => token.isCancellationRequested);
+            return waitForBootloader(() => token.isCancellationRequested, verify);
         });
 
     if (result.kind === "cancelled") {
@@ -63,6 +65,40 @@ async function promptForBootloader(): Promise<DetectedBoot[] | undefined> {
         return undefined;
     }
     return result.boards;
+}
+
+/**
+ * Ask an ambiguous device whether it is genuinely in its bootloader.
+ *
+ * The XIAO ESP32-S3 shows the same VID, PID and serial number running as it
+ * does in its ROM loader, so USB cannot answer this -- measured on the board,
+ * not assumed.  What does answer it is the ROM itself: it replies to esptool
+ * and a running application does not.  Nothing is written; this only connects
+ * and asks what chip it is.
+ */
+function makeVerifier(output: vscode.OutputChannel) {
+    return async (board: DetectedBoot): Promise<boolean> => {
+        if (board.kind !== "esp-rom" || !board.ambiguous || !board.port) {
+            return true;
+        }
+        try {
+            const chip = await probeEspChip({
+                port: board.port,
+                vendorId: board.vendorId ?? 0,
+                productId: board.productId ?? 0,
+                log: (line) => output.appendLine(line),
+            });
+            output.appendLine(`${board.port}: ${chip}, in its bootloader`);
+            return true;
+        } catch (err) {
+            if (err instanceof EspNotRespondingError) {
+                output.appendLine(
+                    `${board.port}: no reply, so not in its bootloader -- still waiting`);
+                return false;
+            }
+            throw err;
+        }
+    };
 }
 
 /**
@@ -200,6 +236,8 @@ async function flash(
                 productId: found.productId ?? 0,
                 data,
                 address: entry.address ?? 0,
+                expectedChip: entry.chip,
+                before: entry.resetBefore,
                 onProgress: (written, total) => report(written, total),
                 log: (line) => output.appendLine(line),
             });
@@ -239,7 +277,10 @@ function withManifestCandidates(found: DetectedBoot, manifest: Manifest): Detect
             : parseHexId(f.bootloader.usb?.vid) === found.vendorId
                 && parseHexId(f.bootloader.usb?.pid) === found.productId;
         if (matches) {
-            extra.push({ id: f.id, name: f.name ?? f.id, kind: f.kind ?? found.kind });
+            extra.push({
+                id: f.id, name: f.name ?? f.id,
+                kind: f.kind ?? found.kind, chip: f.chip,
+            });
         }
     }
 
@@ -298,9 +339,14 @@ async function updateFirmwareInner(
     context: vscode.ExtensionContext,
     output: vscode.OutputChannel,
 ): Promise<void> {
-    let candidates = await detectBootloaders();
+    const verify = makeVerifier(output);
+    // A device whose identity alone proves it is in a bootloader can be used at
+    // once.  An ambiguous one has to be interrogated, which takes seconds, so
+    // that is left to the wait prompt where there is a spinner to show for it
+    // rather than a silent pause before anything appears.
+    let candidates = (await detectBootloaders()).filter((b) => !b.ambiguous);
     if (candidates.length === 0) {
-        const waited = await promptForBootloader();
+        const waited = await promptForBootloader(verify);
         if (!waited) {
             return;      // cancelled, or nothing turned up
         }
@@ -414,9 +460,14 @@ async function flashFromFileInner(
     context: vscode.ExtensionContext,
     output: vscode.OutputChannel,
 ): Promise<void> {
-    let candidates = await detectBootloaders();
+    const verify = makeVerifier(output);
+    // A device whose identity alone proves it is in a bootloader can be used at
+    // once.  An ambiguous one has to be interrogated, which takes seconds, so
+    // that is left to the wait prompt where there is a spinner to show for it
+    // rather than a silent pause before anything appears.
+    let candidates = (await detectBootloaders()).filter((b) => !b.ambiguous);
     if (candidates.length === 0) {
-        const waited = await promptForBootloader();
+        const waited = await promptForBootloader(verify);
         if (!waited) {
             return;
         }
@@ -451,6 +502,8 @@ async function flashFromFileInner(
         url: picked[0].fsPath,
         md5: md5(data),
         address: 0,
+        chip: board.chip,
+        resetBefore: board.resetBefore,
     };
 
     try {

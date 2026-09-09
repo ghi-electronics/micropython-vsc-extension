@@ -15,7 +15,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const MAIN_PY = require("fs").readFileSync(
     require("path").join(__dirname, "..", "examples", "blink", "main.py"));
-const BP_LINE = 32;   // led.toggle()
+const BP_LINE = 32;   // led.value(1)
 
 async function connect() {
     for (let i = 0; i < 40; i++) {

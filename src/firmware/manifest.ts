@@ -28,6 +28,7 @@ import * as vscode from "vscode";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { fileURLToPath, pathToFileURL } from "url";
 import type { FlashKind } from "./boards";
 
 /** USB identity, written as hex strings to match tinyclr_firmware.json. */
@@ -61,6 +62,16 @@ export interface FirmwareFamily {
     sha256?: string;
     /** Byte length, used only to drive the progress bar. */
     size?: number;
+    /**
+     * Chip this firmware targets, as esptool names it ("ESP32-S3").
+     *
+     * Checked against the part that actually answers before anything is
+     * written: the S3's ROM loader shares its USB identity with the C3, C6 and
+     * H2, so the device's VID/PID does not establish which chip it is.
+     */
+    chip?: string;
+    /** esptool "before" mode, when this board needs one other than the default. */
+    resetBefore?: string;
     /**
      * Flash offset for "esp-rom" firmware.  A merged image (bootloader +
      * partition table + application, combined at build time by
@@ -98,7 +109,44 @@ const MANIFEST_CACHE = "micropython_firmware.json";
 
 function manifestUrl(): string {
     const cfg = vscode.workspace.getConfiguration("micropython-sitcore");
-    return cfg.get<string>("firmwareManifestUrl", "").trim();
+    const raw = cfg.get<string>("firmwareManifestUrl", "").trim();
+    // Two or more characters before the colon, so that a Windows drive letter
+    // ("C:/firmware.json") is read as a path and not as a URL scheme named "c".
+    if (raw === "" || /^[a-z][a-z0-9+.-]+:/i.test(raw)) {
+        return raw;
+    }
+    // A bare path was given rather than a URL. Accept it: pointing the
+    // extension at a locally built index is how a release is tested without
+    // publishing it first, and typing a path is the obvious way to do that.
+    return pathToFileURL(raw).href;
+}
+
+/** True for an index or artifact that lives on disk rather than a server. */
+function isLocal(url: string): boolean {
+    return url.startsWith("file:");
+}
+
+/**
+ * Read a URL, from disk or over the network.
+ *
+ * Node's fetch does not implement file:// -- it fails with "not implemented...
+ * yet..." -- so local URLs are read directly.  This exists so a release can be
+ * checked end to end, index and digests included, against a locally generated
+ * index, rather than having to publish to the website to find out whether it
+ * works.
+ */
+async function readUrl(url: string, timeoutMs: number): Promise<Buffer> {
+    if (isLocal(url)) {
+        return fs.readFile(fileURLToPath(url));
+    }
+    const res = await fetch(url, {
+        redirect: "follow",
+        signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) {
+        throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    }
+    return Buffer.from(await res.arrayBuffer());
 }
 
 async function cacheDir(context: vscode.ExtensionContext): Promise<string> {
@@ -156,15 +204,16 @@ export async function loadManifest(
 
     let fetched: string | undefined;
     try {
-        const res = await fetch(url, {
-            redirect: "follow",
-            signal: AbortSignal.timeout(INDEX_TIMEOUT_MS),
-        });
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status} ${res.statusText}`);
+        fetched = (await readUrl(url, INDEX_TIMEOUT_MS)).toString("utf8");
+    } catch (err) {
+        // A local index that cannot be read is a mistake worth reporting: the
+        // user typed a path, and silently falling back to a cached copy of a
+        // different index would be baffling.
+        if (isLocal(url)) {
+            throw new Error(
+                `Cannot read the firmware index at ${fileURLToPath(url)}: ` +
+                `${(err as Error).message}`);
         }
-        fetched = await res.text();
-    } catch {
         // Offline, blocked, or too slow.  The cache is tried next.
         fetched = undefined;
     }
@@ -262,6 +311,19 @@ export async function downloadFirmware(
     }
 
     const url = artifactUrl(family, indexUrl);
+
+    // A local artifact needs none of the streaming machinery below.
+    if (isLocal(url)) {
+        const data = await fs.readFile(fileURLToPath(url));
+        const check = digestMatches(data, family);
+        if (!check.ok) {
+            throw new Error(
+                `${fileURLToPath(url)} does not match the digest in the index ` +
+                `(${check.detail}). Nothing was written to the board.`);
+        }
+        onProgress(data.length, data.length);
+        return data;
+    }
 
     // One AbortController serves three jobs: the user pressing Cancel, the
     // stall watchdog, and tearing the socket down on any error.  Without it a

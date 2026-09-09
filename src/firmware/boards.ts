@@ -26,6 +26,25 @@ export interface BootBoard {
     /** Shown to the user. */
     name: string;
     kind: FlashKind;
+    /**
+     * Chip this board carries, as esptool reports it ("ESP32-S3").
+     *
+     * Checked against the chip that actually answers before anything is
+     * written, because a serial bootloader's USB identity is not always
+     * specific enough to be trusted on its own -- see SERIAL_BOOTLOADERS.
+     */
+    chip?: string;
+    /**
+     * esptool's "before" mode for this board, when the default will not do.
+     *
+     * The S3 needs "usb_reset": its ROM loader is reached over USB Serial/JTAG,
+     * which can reset the part straight back into download mode, and without
+     * that a stub left running from an earlier connection reports nonsense
+     * flash geometry and the write is refused.  The S2 must NOT do this -- its
+     * native-USB CDC has no such path, so a reset would simply boot the
+     * application and leave the bootloader entirely.
+     */
+    resetBefore?: string;
 }
 
 /**
@@ -60,10 +79,40 @@ export const UF2_FAMILIES: { boardId: string; label: string; boards: BootBoard[]
  * and a PID fixed in ROM -- 0x0002 on the S2.  Note this is a different PID
  * from the running firmware (0x4002), so the two states never collide.
  */
-export const SERIAL_BOOTLOADERS: { vid: number; pid: number; board: BootBoard }[] = [
+export const SERIAL_BOOTLOADERS: {
+    vid: number; pid: number; board: BootBoard;
+    /**
+     * True when this identity does not by itself mean "in the bootloader".
+     *
+     * The XIAO ESP32-S3 presents the same VID, PID and serial number whether it
+     * is running or sitting in its ROM loader, because both use the chip's
+     * USB Serial/JTAG unit.  Measured on the board, not assumed.  Such a device
+     * has to be asked -- the ROM answers esptool and a running application does
+     * not -- before the user is told a board is ready to flash.
+     */
+    ambiguous?: boolean;
+}[] = [
     {
+        // ESP32-S2 ROM, over the OTG CDC. Specific to the S2.
         vid: 0x303a, pid: 0x0002,
-        board: { id: "ESP32_GENERIC_S2", name: "ESP32-S2", kind: "esp-rom" },
+        board: {
+            id: "ESP32_GENERIC_S2", name: "ESP32-S2",
+            kind: "esp-rom", chip: "ESP32-S2",
+        },
+    },
+    {
+        // 0x1001 is Espressif's USB Serial/JTAG unit, which is how the S3
+        // presents its ROM loader -- but the C3, C6 and H2 use the same
+        // identity, so this PID says "some Espressif part", not "an S3".
+        // Those chips are out of scope (12.7: USB Serial/JTAG cannot carry a
+        // second CDC), so nothing else here claims this id; the `chip` field
+        // is what actually stops a C3 being given S3 firmware.
+        vid: 0x303a, pid: 0x1001,
+        board: {
+            id: "SEEED_XIAO_ESP32S3", name: "Seeed XIAO ESP32-S3",
+            kind: "esp-rom", chip: "ESP32-S3", resetBefore: "usb_reset",
+        },
+        ambiguous: true,
     },
 ];
 
