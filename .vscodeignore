@@ -15,6 +15,11 @@ build-extension.bat
 install_vsix.bat
 *.vsix
 
+# The README points at the copy hosted on ghielectronics.com, because a
+# relative path would be rewritten to this repository's raw URL and this
+# repository is private. So the master here is 358 KB of dead weight in a .vsix.
+demo.jpg
+
 # Generated at release time and fetched from the website at run time; a stale
 # copy bundled here would only ever be misleading.
 micropython_firmware.json

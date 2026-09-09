@@ -10,6 +10,8 @@ Watch window. No JTAG, no debug probe, no wiring.
 microcontroller.** Not a print-and-guess loop, and not a simulator: the real chip, halted
 on the real line, with the real values in scope.
 
+![MicroPython Debugger stopped on a breakpoint on a real board, showing locals, a watch expression, the call stack and program output](https://www.ghielectronics.com/img/docs/micropython-debugger-img.jpg)
+
 ## What you get
 
 | | |
