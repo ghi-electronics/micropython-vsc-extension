@@ -11,10 +11,7 @@
  */
 
 import type { BootBoard, FlashKind } from "./boards";
-import {
-    BOOTLOADER_HINTS, GENERIC_BOOTLOADER_HINT,
-    SERIAL_BOOTLOADERS, familyForBoardId,
-} from "./boards";
+import { SERIAL_BOOTLOADERS, familyForBoardId } from "./boards";
 import { findUf2Drives, type Uf2Drive } from "./drives";
 
 // serialport is loaded lazily for the same reason deviceLink.ts does it: it is
@@ -92,7 +89,7 @@ export async function detectBootloaders(): Promise<DetectedBoot[]> {
             if (hit) {
                 out.push({
                     kind: "esp-rom",
-                    label: hit.board.name,
+                    label: hit.board.deviceSupport,
                     candidates: [hit.board],
                     port: p.path,
                     vendorId: vid,
@@ -107,31 +104,6 @@ export async function detectBootloaders(): Promise<DetectedBoot[]> {
     }
 
     return out;
-}
-
-/**
- * The right way to reach the bootloader on whatever board is plugged in.
- *
- * Falls back to wording that covers both styles when nothing recognisable is
- * connected -- which is also the case where the user most needs it, since we
- * cannot look at their board for them.
- */
-export async function bootloaderHint(): Promise<string> {
-    try {
-        const ports = await serialport().SerialPort.list();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for (const p of ports as any[]) {
-            const vid = parseInt(p.vendorId ?? "", 16);
-            const pid = parseInt(p.productId ?? "", 16);
-            const hit = BOOTLOADER_HINTS.find((h) => h.vid === vid && h.pid === pid);
-            if (hit) {
-                return hit.hint;
-            }
-        }
-    } catch {
-        // No serialport, or no permission. The generic wording still applies.
-    }
-    return GENERIC_BOOTLOADER_HINT;
 }
 
 /** Outcome of waiting for a board, so the caller can say what happened. */
@@ -167,6 +139,7 @@ const RECHECK_MS = 8_000;
 export async function waitForBootloader(
     isCancelled: () => boolean,
     verify?: (board: DetectedBoot) => Promise<boolean>,
+    kind?: FlashKind,
     timeoutMs = WAIT_TIMEOUT_MS,
     pollMs = 500,
 ): Promise<WaitResult> {
@@ -189,7 +162,11 @@ export async function waitForBootloader(
             return { kind: "cancelled" };
         }
 
-        const found = await detectBootloaders();
+        // Only bootloaders that can take this firmware.  The board is chosen
+        // before this point now, so a UF2 drive appearing while an ESP32 image
+        // is waiting is somebody else's board, not the one we are here for.
+        const found = (await detectBootloaders())
+            .filter((b) => kind === undefined || b.kind === kind);
         const present = new Set(found.map(keyOf));
         const now = Date.now();
         for (const [key, at] of [...rejected]) {

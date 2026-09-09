@@ -38,8 +38,15 @@ export interface UsbId { vid: string; pid: string; }
 export interface FirmwareFamily {
     /** Matches the MicroPython board name, e.g. "RPI_PICO2". */
     id: string;
-    /** Shown to the user. */
-    name: string;
+    /**
+     * The parts this entry covers, listed for the user.
+     *
+     * A single entry often serves several devices -- one SITCore build covers
+     * an SC13048 and a FEZ Flea, one generic ESP32-S3 build covers every N8R8
+     * and N16R8 module -- so this is a list, shown under the id rather than
+     * pretending to be one product name.
+     */
+    device_support: string;
     /** How it reaches the chip. Defaults to "uf2-drive" when absent. */
     kind?: FlashKind;
     /**
@@ -52,6 +59,12 @@ export interface FirmwareFamily {
      */
     bootloader?: { boardId?: string; usb?: UsbId };
     version: string;
+    /**
+     * "N/A" for a board that is announced but has no firmware yet.
+     *
+     * Published deliberately: the list should show what is coming, and the
+     * extension stops on it rather than pretending an install is possible.
+     */
     /** ISO date the firmware was published. Shown so "latest" is legible. */
     date?: string;
     /** Site-relative ("/bin/fw/...") or absolute. Resolved against the index URL. */
@@ -72,6 +85,16 @@ export interface FirmwareFamily {
     chip?: string;
     /** esptool "before" mode, when this board needs one other than the default. */
     resetBefore?: string;
+    /**
+     * How to put *this* board into its bootloader, in the user's words.
+     *
+     * Published rather than built in, because it differs per board and getting
+     * it wrong strands the user on the one manual step in the product: a
+     * Raspberry Pi Pico has no RESET button, a SITCore's button is marked LDR.
+     * Keeping it in the index means a new board arrives with its own wording
+     * and no extension release.
+     */
+    enterBootloader?: string;
     /**
      * Flash offset for "esp-rom" firmware.  A merged image (bootloader +
      * partition table + application, combined at build time by
@@ -161,6 +184,17 @@ export function md5(data: Buffer): string {
 
 export function sha256(data: Buffer): string {
     return crypto.createHash("sha256").update(data).digest("hex");
+}
+
+/**
+ * Whether this entry has firmware behind it.
+ *
+ * An announced-but-unbuilt board is published with url "N/A" so the supported
+ * list is complete; everything downstream has to notice and stop.
+ */
+export function isAvailable(family: { url?: string }): boolean {
+    const u = (family.url ?? "").trim();
+    return u !== "" && u.toUpperCase() !== "N/A";
 }
 
 /** Parse "0x303A" or "303a" into a number. */
@@ -254,7 +288,7 @@ function parseManifest(text: string): Manifest {
         if (!f.id || !f.url) {
             throw new Error(`Firmware index entry '${f.id ?? "?"}' is missing id or url.`);
         }
-        if (!f.md5 && !f.sha256) {
+        if (isAvailable(f) && !f.md5 && !f.sha256) {
             throw new Error(
                 `Firmware index entry '${f.id}' has no md5 or sha256. Firmware is not ` +
                 `written to a board unverified.`);
@@ -405,7 +439,7 @@ async function readBody(
     const check = digestMatches(data, family);
     if (!check.ok) {
         throw new Error(
-            `Firmware for ${family.name} failed its checksum -- the download is incomplete, ` +
+            `Firmware for ${family.id} failed its checksum -- the download is incomplete, ` +
             `or the file on the server changed (${check.detail}). ` +
             `Nothing was written to the board.`);
     }

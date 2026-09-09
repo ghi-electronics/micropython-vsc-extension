@@ -23,8 +23,8 @@ export type FlashKind =
 export interface BootBoard {
     /** Stable id, matches the `id` field in the firmware manifest. */
     id: string;
-    /** Shown to the user. */
-    name: string;
+    /** The parts this entry covers, shown under the id. */
+    deviceSupport: string;
     kind: FlashKind;
     /**
      * Chip this board carries, as esptool reports it ("ESP32-S3").
@@ -45,6 +45,8 @@ export interface BootBoard {
      * application and leave the bootloader entirely.
      */
     resetBefore?: string;
+    /** How to put this board into its bootloader. Published in the index. */
+    enterBootloader?: string;
 }
 
 /**
@@ -59,15 +61,22 @@ export const UF2_FAMILIES: { boardId: string; label: string; boards: BootBoard[]
         boardId: "RPI-RP2",
         label: "RP2040",
         boards: [
-            { id: "RPI_PICO", name: "Raspberry Pi Pico", kind: "uf2-drive" },
-            { id: "ADAFRUIT_QTPY_RP2040", name: "Adafruit QT Py RP2040", kind: "uf2-drive" },
+            {
+                id: "RPI_PICO", deviceSupport: "Raspberry Pi Pico", kind: "uf2-drive",
+            },
+            {
+                id: "ADAFRUIT_QTPY_RP2040", deviceSupport: "Adafruit QT Py RP2040",
+                kind: "uf2-drive",
+            },
         ],
     },
     {
         boardId: "RP2350",
         label: "RP2350",
         boards: [
-            { id: "RPI_PICO2", name: "Raspberry Pi Pico 2", kind: "uf2-drive" },
+            {
+                id: "RPI_PICO2", deviceSupport: "Raspberry Pi Pico 2", kind: "uf2-drive",
+            },
         ],
     },
 ];
@@ -96,7 +105,7 @@ export const SERIAL_BOOTLOADERS: {
         // ESP32-S2 ROM, over the OTG CDC. Specific to the S2.
         vid: 0x303a, pid: 0x0002,
         board: {
-            id: "ESP32_GENERIC_S2", name: "ESP32-S2",
+            id: "ESP32_GENERIC_S2", deviceSupport: "ESP32-S2",
             kind: "esp-rom", chip: "ESP32-S2",
         },
     },
@@ -109,7 +118,7 @@ export const SERIAL_BOOTLOADERS: {
         // is what actually stops a C3 being given S3 firmware.
         vid: 0x303a, pid: 0x1001,
         board: {
-            id: "SEEED_XIAO_ESP32S3", name: "Seeed XIAO ESP32-S3",
+            id: "SEEED_XIAO_ESP32S3", deviceSupport: "Seeed XIAO ESP32-S3",
             kind: "esp-rom", chip: "ESP32-S3", resetBefore: "usb_reset",
         },
         ambiguous: true,
@@ -117,51 +126,16 @@ export const SERIAL_BOOTLOADERS: {
 ];
 
 /**
- * How to reach the bootloader, keyed by the USB identity a board shows while
- * it is running normally.
+ * Shown when the board's own wording is not available.
  *
- * The gesture is not the same on every board, and getting it wrong is not a
- * nicety: **a Raspberry Pi Pico has no RESET button at all.**  It has one
- * button, marked BOOTSEL, and the way in is to hold it while the USB cable is
- * plugged in.  Telling that user to "hold BOOT and tap RESET" asks them to
- * press a button their board does not have, on the single manual step in the
- * whole product.
- *
- * Matched against the running device, because at the moment this is shown
- * nothing is in a bootloader yet -- that is what we are waiting for.
+ * Per-board instructions live in the published index (`enterBootloader`), so
+ * they can be reworded without shipping an extension.  This is the one case
+ * with no index to read: installing from a local file with no network.  It has
+ * to cover both styles, because a Raspberry Pi Pico has no RESET button.
  */
-export const BOOTLOADER_HINTS: { vid: number; pid: number; hint: string }[] = [
-    {
-        // Pico and Pico 2, ours or stock -- deliberately the same identity.
-        vid: 0x2e8a, pid: 0x0005,
-        hint: "Unplug the board, then plug the USB cable back in while holding BOOTSEL.",
-    },
-    {
-        vid: 0x239a, pid: 0x80f8,
-        hint: "Hold BOOT, tap RESET, then release BOOT.",
-    },
-    {
-        // ESP32-S2/S3 running this firmware (two CDCs).
-        vid: 0x303a, pid: 0x4002,
-        hint: "Hold BOOT, tap RESET, then release BOOT.",
-    },
-    {
-        // ESP32-S2/S3 running stock MicroPython (one CDC) -- the case a new
-        // user is in before they have ever installed this firmware.
-        vid: 0x303a, pid: 0x4001,
-        hint: "Hold BOOT, tap RESET, then release BOOT.",
-    },
-    {
-        vid: 0x1b9f, pid: 0xf105,
-        hint: "Hold LDR, tap RESET, then release LDR.",
-    },
-];
-
-/** Used when no board we recognise is connected, so it has to cover both styles. */
 export const GENERIC_BOOTLOADER_HINT =
-    "Hold the BOOT button and tap RESET, then release BOOT. If your board has no "
-    + "RESET button -- a Raspberry Pi Pico has only BOOTSEL -- hold the button "
-    + "while plugging the USB cable in instead.";
+    "Put the board into its bootloader: on most boards hold BOOT and tap RESET, "
+    + "and on a Raspberry Pi Pico hold BOOTSEL while plugging the USB cable in.";
 
 /** Every board this extension can flash, for manual selection and messages. */
 export function allBoards(): BootBoard[] {

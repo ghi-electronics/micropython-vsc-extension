@@ -101,7 +101,16 @@ function check(name, ok, detail) {
         check("index declares schemaVersion 1", idx.schemaVersion === 1);
         check("index has families", Array.isArray(idx.families) && idx.families.length > 0);
 
+        // Entries published as "N/A" are boards announced without firmware; the
+        // list is meant to show them, and nothing downstream may treat them as
+        // installable.
+        const ready = idx.families.filter((f) => f.url !== "N/A");
         for (const f of idx.families) {
+            check(`${f.id}: names the parts it covers`,
+                typeof f.device_support === "string" && f.device_support.length > 0,
+                JSON.stringify(f.device_support));
+        }
+        for (const f of ready) {
             check(`${f.id}: has a digest`, Boolean(f.md5 || f.sha256));
             check(`${f.id}: url is under the publish dir`,
                 typeof f.url === "string" && f.url.startsWith("/bin/fw/"), f.url);
@@ -111,6 +120,8 @@ function check(name, ok, detail) {
                 check(`${f.id}: merged image is written at 0`, f.address === 0);
             }
         }
+        check("unavailable boards are still listed",
+            idx.families.some((f) => f.url === "N/A"));
 
         // Every board the extension ships knowing must be in the index, or the
         // user is offered a board and then told there is no firmware for it.

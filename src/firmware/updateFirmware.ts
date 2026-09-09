@@ -20,14 +20,12 @@
 
 import * as vscode from "vscode";
 import * as fs from "fs/promises";
-import { allBoards, type BootBoard } from "./boards";
-import {
-    bootloaderHint, detectBootloaders, waitForBootloader, type DetectedBoot,
-} from "./detect";
+import { allBoards, GENERIC_BOOTLOADER_HINT, type BootBoard } from "./boards";
+import { detectBootloaders, waitForBootloader, type DetectedBoot } from "./detect";
 import { writeUf2 } from "./drives";
 import { EspNotRespondingError, flashEsp, probeEspChip } from "./espFlash";
 import {
-    downloadFirmware, loadManifest, md5, parseHexId,
+    downloadFirmware, isAvailable, loadManifest, md5, parseHexId,
     type FirmwareFamily, type Manifest,
 } from "./manifest";
 
@@ -40,7 +38,7 @@ import {
  */
 export type UpdateResult = "flashed" | "cancelled" | "no-index" | "failed";
 
-/** Remembers which board an ambiguous RP2040 turned out to be, so we ask once. */
+/** Remembers which board was chosen last, so it is offered first. */
 const LAST_BOARD_KEY = "firmware.lastBoardId";
 
 /**
@@ -52,11 +50,12 @@ const LAST_BOARD_KEY = "firmware.lastBoardId";
  */
 async function promptForBootloader(
     verify: (board: DetectedBoot) => Promise<boolean>,
+    kind?: DetectedBoot["kind"],
+    published?: string,
 ): Promise<DetectedBoot[] | undefined> {
-    // Asked before the notification opens: the instruction differs per board,
-    // and it is read from whatever is plugged in right now, because nothing is
-    // in a bootloader yet -- that is what we are about to wait for.
-    const hint = await bootloaderHint();
+    // The chosen board's own wording, from the index.  The fallback is for the
+    // one case with no index to read: installing from a local file offline.
+    const hint = published ?? GENERIC_BOOTLOADER_HINT;
 
     const result = await vscode.window.withProgress(
         {
@@ -66,7 +65,7 @@ async function promptForBootloader(
         },
         async (progress, token) => {
             progress.report({ message: hint });
-            return waitForBootloader(() => token.isCancellationRequested, verify);
+            return waitForBootloader(() => token.isCancellationRequested, verify, kind);
         });
 
     if (result.kind === "cancelled") {
@@ -158,9 +157,11 @@ async function pickFrom(
 
     const pick = await vscode.window.showQuickPick(
         items.map((b) => ({
-            label: b.name,
+            // The id names the family; the second line lists the parts it
+            // covers, because one entry often serves several devices.
+            label: b.id,
             description: b.id === last ? "used last time" : undefined,
-            detail: b.id,
+            detail: b.deviceSupport,
             board: b,
         })),
         { title, placeHolder, ignoreFocusOut: true });
@@ -172,64 +173,46 @@ async function pickFrom(
 }
 
 /** Every board the index publishes for a given flashing mechanism. */
-function publishedFor(manifest: Manifest, kind: DetectedBoot["kind"]): BootBoard[] {
+function publishedFor(manifest: Manifest, kind?: DetectedBoot["kind"]): BootBoard[] {
     return manifest.families
-        .filter((f) => (f.kind ?? "uf2-drive") === kind)
+        .filter((f) => kind === undefined || (f.kind ?? "uf2-drive") === kind)
         .map((f) => ({
             id: f.id,
-            name: f.name ?? f.id,
-            kind: f.kind ?? kind,
+            deviceSupport: f.device_support ?? f.id,
+            // "uf2-drive" is the documented default when an entry omits kind.
+            kind: f.kind ?? "uf2-drive",
             chip: f.chip,
             resetBefore: f.resetBefore,
+            enterBootloader: f.enterBootloader,
         }));
 }
 
 /**
- * Decide which board we are looking at.
+ * Ask which board the user has.
  *
- * Bootloaders are worse at identifying boards than one would hope, and there
- * are two degrees of it:
+ * Always asked, never inferred.  A bootloader reports its chip, not its board:
+ * every RP2350 looks like a Pico 2 in BOOTSEL and every S3 looks alike in its
+ * ROM loader, so inference was right often but not always, and its mistakes
+ * were silent ones that overwrote firmware.
  *
- *   - **Ambiguous.**  An RP2040 in BOOTSEL cannot say whether it is a Pico or a
- *     QT Py; both report `Board-ID: RPI-RP2`, because that string comes from
- *     the chip's ROM and not the board.  The candidates are known, so the user
- *     picks between them.
- *   - **Unrecognised.**  A UF2 drive whose Board-ID this build has never heard
- *     of -- a board newer than the extension, or one we carry no firmware for.
- *     Nothing is known except how firmware reaches it, so everything published
- *     for that mechanism is offered.  Guessing here would be worse than asking,
- *     and refusing outright is worse still: the board is plainly sitting in its
- *     bootloader.
- *
- * A board that identifies itself unambiguously -- RP2350, ESP32 -- is never
- * asked about.
+ * The list is the published index, so boards can be renamed, added or withdrawn
+ * on the website without shipping an extension.  detect.ts still works out what
+ * a bootloader could be, and DetectedBoot.candidates still carries it, should
+ * inference ever be wanted again.
  */
 async function chooseBoard(
     context: vscode.ExtensionContext,
-    found: DetectedBoot,
     manifest: Manifest,
 ): Promise<BootBoard | undefined> {
-    if (found.candidates.length === 1) {
-        return found.candidates[0];
-    }
-
-    const unrecognised = found.candidates.length === 0;
-    const choices = unrecognised ? publishedFor(manifest, found.kind) : found.candidates;
-
+    const choices = publishedFor(manifest);
     if (choices.length === 0) {
-        fail(`No firmware for a ${found.label} board`,
-            "A bootloader was found, but the firmware list has nothing that can be " +
-            "written to it.");
+        fail("No firmware available", "The firmware list has no boards in it.");
         return undefined;
     }
-
     return pickFrom(context, choices,
-        unrecognised
-            ? `Unrecognised bootloader (${found.label}) -- which board is this?`
-            : `Which ${found.label} board is this?`,
-        unrecognised
-            ? "Pick your board. Choosing wrongly is recoverable: hold BOOT, tap RESET, and flash again"
-            : "The bootloader does not identify the board, so this has to be confirmed");
+        "Which board do you have?",
+        "Pick your board. Choosing wrongly is recoverable: put it back in its "
+        + "bootloader and install again");
 }
 
 /**
@@ -286,7 +269,7 @@ async function flash(
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: `Installing on ${entry.name}`,
+            title: `Installing on ${entry.id}`,
             cancellable: false,
         },
         async (progress) => {
@@ -324,41 +307,8 @@ function reportDone(found: DetectedBoot, entry: FirmwareFamily): void {
         ? "The board has restarted. Press F5 to start debugging."
         : "Tap RESET on the board, then press F5 to start debugging.";
     void vscode.window.showInformationMessage(
-        `Your ${entry.name} is ready to debug`,
+        `Your ${entry.id} is ready to debug`,
         { modal: true, detail }, "OK");
-}
-
-/**
- * Widen the candidate list with boards the index declares.
- *
- * boards.ts is what this build ships knowing; the index is what exists today.
- * Merging the two means a board added to the website is offered as soon as it
- * is published, without waiting for an extension release -- provided it reaches
- * its bootloader the same way a board already supported does.
- */
-function withManifestCandidates(found: DetectedBoot, manifest: Manifest): DetectedBoot {
-    const known = new Set(found.candidates.map((c) => c.id));
-    const extra: BootBoard[] = [];
-
-    for (const f of manifest.families) {
-        if (known.has(f.id) || !f.bootloader) {
-            continue;
-        }
-        const matches = found.kind === "uf2-drive"
-            ? f.bootloader.boardId?.toLowerCase() === found.drive?.boardId.toLowerCase()
-            : parseHexId(f.bootloader.usb?.vid) === found.vendorId
-                && parseHexId(f.bootloader.usb?.pid) === found.productId;
-        if (matches) {
-            extra.push({
-                id: f.id, name: f.name ?? f.id,
-                kind: f.kind ?? found.kind, chip: f.chip,
-            });
-        }
-    }
-
-    return extra.length === 0
-        ? found
-        : { ...found, candidates: [...found.candidates, ...extra] };
 }
 
 /**
@@ -412,24 +362,6 @@ async function updateFirmwareInner(
     context: vscode.ExtensionContext,
     output: vscode.OutputChannel,
 ): Promise<UpdateResult> {
-    const verify = makeVerifier(output);
-    // A device whose identity alone proves it is in a bootloader can be used at
-    // once.  An ambiguous one has to be interrogated, which takes seconds, so
-    // that is left to the wait prompt where there is a spinner to show for it
-    // rather than a silent pause before anything appears.
-    let candidates = (await detectBootloaders()).filter((b) => !b.ambiguous);
-    if (candidates.length === 0) {
-        const waited = await promptForBootloader(verify);
-        if (!waited) {
-            return "cancelled";      // cancelled, or nothing turned up
-        }
-        candidates = waited;
-    }
-    const found = await pickBootloader(candidates);
-    if (!found) {
-        return "cancelled";
-    }
-
     let loaded: Awaited<ReturnType<typeof loadManifest>>;
     try {
         loaded = await loadManifest(context);
@@ -439,37 +371,47 @@ async function updateFirmwareInner(
         output.appendLine(`firmware index unavailable: ${(err as Error).message}`);
         return "no-index";
     }
-
     const { manifest, url: indexUrl, stale } = loaded;
 
-    const board = await chooseBoard(
-        context, withManifestCandidates(found, manifest), manifest);
+    // The board is chosen first, so everything after it follows from one
+    // deliberate answer rather than a guess: which bootloader to wait for, what
+    // to tell the user to press, and which chip must answer before a write.
+    const board = await chooseBoard(context, manifest);
     if (!board) {
         return "cancelled";
     }
 
     let entry = manifest.families.find((f) => f.id === board.id);
     if (!entry) {
-        fail(`No firmware published for ${board.name}`,
+        fail(`No firmware published for ${board.id}`,
             `The firmware list has no entry with the id "${board.id}". ` +
             `It may not be released yet.`);
         return "failed";
     }
 
-    // The board named here is often an assumption, not a fact: a bootloader
-    // reports its chip, not its board, so every RP2350 board is offered Pico 2
-    // firmware and every RP2040 one of two others.  That is usually right, and
-    // always worth being able to overrule -- with no way out, someone holding a
-    // different RP2350 board concludes they need the exact board named, and
-    // gives up.
+    // A board that is listed but has no firmware behind it yet.  It appears in
+    // the list on purpose -- the supported list should show what is coming --
+    // so this is an ordinary outcome, not an error.
+    if (!isAvailable(entry)) {
+        void vscode.window.showInformationMessage(
+            `Firmware for ${entry.id} is not ready yet`,
+            {
+                modal: true,
+                detail: `Support for ${entry.device_support} is on the way. `
+                    + "There is nothing to install today.",
+            },
+            "OK");
+        return "cancelled";
+    }
+
     for (;;) {
-        // No version string here.  It means nothing to the person reading it
-        // and a build id in a dialog reads as something having gone wrong; it
-        // goes to the output channel instead, where support can find it.
+        // No version string in the dialog.  It means nothing to the person
+        // reading it and a build id reads as something having gone wrong; it
+        // goes to the output channel, where support can find it.
         output.appendLine(`installing ${entry.id} ${entry.version}`);
 
         const go = await vscode.window.showWarningMessage(
-            `Add real debugging to your ${entry.name}?`,
+            `Add real debugging to your ${entry.id}?`,
             {
                 modal: true,
                 detail:
@@ -485,28 +427,33 @@ async function updateFirmwareInner(
             return "cancelled";
         }
 
-        const other = await pickFrom(
-            context, publishedFor(manifest, found.kind),
+        const other = await pickFrom(context, publishedFor(manifest),
             "Which board do you have?",
-            "Every board with published firmware for this bootloader");
+            "Every board with published firmware");
         if (!other) {
             return "cancelled";
         }
         const swapped = manifest.families.find((f) => f.id === other.id);
         if (!swapped) {
-            fail(`No firmware published for ${other.name}`,
+            fail(`No firmware published for ${other.id}`,
                 `The firmware list has no entry with the id "${other.id}".`);
             return "failed";
         }
         entry = swapped;
     }
 
+    // Downloaded before the board is asked for, not after.
+    //
+    // By the time the user is pressing buttons everything is in hand and
+    // verified, so the wait ends in an immediate write.  It also removes a
+    // failure case outright: the board cannot leave its bootloader during the
+    // download, because it is not in one yet.
     let data: Buffer;
     try {
         data = await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: `Downloading firmware for ${entry.name}`,
+                title: `Downloading firmware for ${entry.id}`,
                 cancellable: true,
             },
             async (progress, token) => {
@@ -521,22 +468,30 @@ async function updateFirmwareInner(
         return "failed";
     }
 
-    // The board may have been unplugged while the download ran.
-    const still = (await detectBootloaders()).find((d) => d.kind === found.kind);
-    if (!still) {
-        fail("The board left its bootloader",
-            "Nothing was written to the device. Hold BOOT, tap RESET to put it back " +
-            "into the bootloader, then run the command again.");
-        return "failed";
+    // Now, and only now, ask for the board -- in this board's own words.
+    const kind = entry.kind ?? "uf2-drive";
+    const verify = makeVerifier(output);
+    let ready = (await detectBootloaders())
+        .filter((b) => b.kind === kind && !b.ambiguous);
+    if (ready.length === 0) {
+        const waited = await promptForBootloader(verify, kind, entry.enterBootloader);
+        if (!waited) {
+            return "cancelled";
+        }
+        ready = waited;
+    }
+    const found = await pickBootloader(ready);
+    if (!found) {
+        return "cancelled";
     }
 
     try {
-        await flash(still, entry, data, output);
+        await flash(found, entry, data, output);
     } catch (err) {
         fail("Flashing failed", describe(err));
         return "failed";
     }
-    reportDone(still, entry);
+    reportDone(found, entry);
     return "flashed";
 }
 
@@ -569,50 +524,35 @@ async function flashFromFileInner(
     context: vscode.ExtensionContext,
     output: vscode.OutputChannel,
 ): Promise<void> {
-    const verify = makeVerifier(output);
-    // A device whose identity alone proves it is in a bootloader can be used at
-    // once.  An ambiguous one has to be interrogated, which takes seconds, so
-    // that is left to the wait prompt where there is a spinner to show for it
-    // rather than a silent pause before anything appears.
-    let candidates = (await detectBootloaders()).filter((b) => !b.ambiguous);
-    if (candidates.length === 0) {
-        const waited = await promptForBootloader(verify);
-        if (!waited) {
-            return;
-        }
-        candidates = waited;
-    }
-    const found = await pickBootloader(candidates);
-    if (!found) {
+    // Same shape as the indexed path: the board is chosen first, always.  There
+    // is no index here, so the list is what this build knows how to reach.
+    const board = await chooseBoard(context, {
+        schemaVersion: 1,
+        families: allBoards().map((b) => ({
+            ...b, device_support: b.deviceSupport, version: "from file",
+            // Local file: no download, so a placeholder url that still reads as
+            // available. isAvailable() rejects "" and "N/A".
+            url: b.id,
+        })),
+    });
+    if (!board) {
         return;
     }
 
-    const wantUf2 = found.kind === "uf2-drive";
+    const wantUf2 = board.kind === "uf2-drive";
     const picked = await vscode.window.showOpenDialog({
-        title: `Firmware for ${found.label}`,
+        title: `Firmware for ${board.id}`,
         canSelectMany: false,
         filters: wantUf2 ? { "UF2 firmware": ["uf2"] } : { "ESP32 image": ["bin"] },
     });
     if (!picked || picked.length === 0) {
         return;
     }
-
     const data = await fs.readFile(picked[0].fsPath);
-    // Flashing from a file has no index to fall back on, so an unrecognised
-    // bootloader is offered every board this build knows how to reach.
-    const board = await chooseBoard(context, found, {
-        schemaVersion: 1,
-        families: allBoards()
-            .filter((b) => b.kind === found.kind)
-            .map((b) => ({ ...b, version: "from file", url: "" })),
-    });
-    if (!board) {
-        return;
-    }
 
     const entry: FirmwareFamily = {
         id: board.id,
-        name: board.name,
+        device_support: board.deviceSupport,
         kind: board.kind,
         version: "from file",
         url: picked[0].fsPath,
@@ -620,12 +560,29 @@ async function flashFromFileInner(
         address: 0,
         chip: board.chip,
         resetBefore: board.resetBefore,
+        enterBootloader: board.enterBootloader,
     };
+
+    // Only now ask for the board, and only if one is not already waiting.
+    const verify = makeVerifier(output);
+    let ready = (await detectBootloaders())
+        .filter((b) => b.kind === board.kind && !b.ambiguous);
+    if (ready.length === 0) {
+        const waited = await promptForBootloader(verify, board.kind, board.enterBootloader);
+        if (!waited) {
+            return;
+        }
+        ready = waited;
+    }
+    const found = await pickBootloader(ready);
+    if (!found) {
+        return;
+    }
 
     try {
         await flash(found, entry, data, output);
     } catch (err) {
-        fail("Flashing failed", (err as Error).message);
+        fail("Flashing failed", describe(err));
         return;
     }
     reportDone(found, entry);

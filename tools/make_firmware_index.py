@@ -37,35 +37,59 @@ PUBLISH_DIR = "/bin/fw"
 # esp32, where the artifact has to be merged first.  "publish" is the file name
 # on the website; {version} is substituted.
 BOARDS = [
+    # Announced but not yet shipping: the SITCore parts need GHI's own
+    # bootloader, which this toolchain cannot produce yet.  They are published
+    # with url "N/A" so the list shows what is coming; the extension recognises
+    # that and stops rather than pretending to install something.
+    {
+        "id": "SC20xxx",
+        "device_support": "SC20260N, SC20260D",
+        "kind": "ghi-loader",
+        "enterBootloader": "Hold LDR, tap RESET, then release LDR.",
+        "unavailable": True,
+    },
+    {
+        "id": "SC13xxx",
+        "device_support": "SC13048, FEZ Flea",
+        "kind": "ghi-loader",
+        "enterBootloader": "Hold LDR, tap RESET, then release LDR.",
+        "unavailable": True,
+    },
     {
         "id": "RPI_PICO",
-        "name": "Raspberry Pi Pico",
+        "device_support": "Raspberry Pi Pico",
         "kind": "uf2-drive",
         "bootloader": {"boardId": "RPI-RP2"},
+        "enterBootloader": "Unplug the board, then plug the USB cable back in "
+                           "while holding BOOTSEL.",
         "artifact": "ports/rp2/build-RPI_PICO/firmware.uf2",
         "publish": "micropython-rpi-pico-v{version}.uf2",
     },
     {
         "id": "RPI_PICO2",
-        "name": "Raspberry Pi Pico 2",
+        "device_support": "Raspberry Pi Pico 2",
         "kind": "uf2-drive",
         "bootloader": {"boardId": "RP2350"},
+        "enterBootloader": "Unplug the board, then plug the USB cable back in "
+                           "while holding BOOTSEL.",
         "artifact": "ports/rp2/build-RPI_PICO2/firmware.uf2",
         "publish": "micropython-rpi-pico2-v{version}.uf2",
     },
     {
         "id": "ADAFRUIT_QTPY_RP2040",
-        "name": "Adafruit QT Py RP2040",
+        "device_support": "Adafruit QT Py RP2040",
         "kind": "uf2-drive",
         "bootloader": {"boardId": "RPI-RP2"},
+        "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
         "artifact": "ports/rp2/build-ADAFRUIT_QTPY_RP2040/firmware.uf2",
         "publish": "micropython-qtpy-rp2040-v{version}.uf2",
     },
     {
         "id": "ESP32_GENERIC_S2",
-        "name": "ESP32-S2",
+        "device_support": "ESP32-S2",
         "kind": "esp-rom",
         "bootloader": {"usb": {"vid": "0x303A", "pid": "0x0002"}},
+        "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
         "chip": "ESP32-S2",
         "address": 0,
         "esp_build": "ports/esp32/build-ESP32_GENERIC_S2",
@@ -73,11 +97,12 @@ BOARDS = [
     },
     {
         "id": "SEEED_XIAO_ESP32S3",
-        "name": "Seeed XIAO ESP32-S3",
+        "device_support": "Seeed XIAO ESP32-S3",
         "kind": "esp-rom",
         # S3 exposes its ROM loader over USB Serial/JTAG rather than the OTG
         # CDC the S2 uses, so it answers to a different PID.
         "bootloader": {"usb": {"vid": "0x303A", "pid": "0x1001"}},
+        "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
         "chip": "ESP32-S3",
         # See boards.ts: the S3 is reached over USB Serial/JTAG, which can reset
         # it back into download mode. Without that, a stub left running from an
@@ -98,9 +123,10 @@ BOARDS = [
         # application to the end of flash (ports/esp32/main.c), so this covers
         # 4, 8 and 16 MB parts alike.
         "id": "ESP32_GENERIC_S3-SPIRAM_OCT",
-        "name": "ESP32-S3 with 8 MB PSRAM (N8R8, N16R8)",
+        "device_support": "ESP32-S3 with 8 MB PSRAM (N8R8, N16R8)",
         "kind": "esp-rom",
         "bootloader": {"usb": {"vid": "0x303A", "pid": "0x1001"}},
+        "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
         "chip": "ESP32-S3",
         "resetBefore": "usb_reset",
         "address": 0,
@@ -201,6 +227,19 @@ def main():
     to_publish = []
 
     for board in BOARDS:
+        if board.get("unavailable"):
+            families.append({
+                "id": board["id"],
+                "device_support": board["device_support"],
+                "kind": board.get("kind"),
+                "enterBootloader": board.get("enterBootloader"),
+                "version": version,
+                "date": date,
+                "url": "N/A",
+            })
+            print("  %-24s %s" % (board["id"], "not yet available"))
+            continue
+
         if "esp_build" in board:
             build_dir = os.path.join(root, board["esp_build"])
             path = merge_esp(build_dir,
@@ -226,7 +265,7 @@ def main():
 
         entry = {
             "id": board["id"],
-            "name": board["name"],
+            "device_support": board["device_support"],
             "kind": board["kind"],
             "bootloader": board["bootloader"],
             "version": version,
@@ -241,6 +280,8 @@ def main():
             entry["chip"] = board["chip"]
         if "resetBefore" in board:
             entry["resetBefore"] = board["resetBefore"]
+        if "enterBootloader" in board:
+            entry["enterBootloader"] = board["enterBootloader"]
         families.append(entry)
         to_publish.append((path, os.path.basename(entry["url"])))
 
