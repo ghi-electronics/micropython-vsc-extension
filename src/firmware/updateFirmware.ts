@@ -364,8 +364,31 @@ async function updateFirmwareInner(
 ): Promise<UpdateResult> {
     let loaded: Awaited<ReturnType<typeof loadManifest>>;
     try {
-        loaded = await loadManifest(context);
+        // Shown even though it is usually quick.  The first fetch of a session
+        // pays for DNS, TLS and the round trip, and with nothing on screen the
+        // command looks like it did nothing at all -- so it gets clicked again,
+        // and again, until the "already running" guard finally says something.
+        // The feedback is the fix; the guard was only the symptom talking.
+        loaded = await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: "Checking for firmware",
+                cancellable: true,
+            },
+            async (progress, token) => {
+                progress.report({ message: "Fetching the list of supported boards..." });
+                return Promise.race([
+                    loadManifest(context),
+                    new Promise<never>((_resolve, reject) => {
+                        token.onCancellationRequested(
+                            () => reject(new vscode.CancellationError()));
+                    }),
+                ]);
+            });
     } catch (err) {
+        if (err instanceof vscode.CancellationError) {
+            return "cancelled";
+        }
         // loadManifest only throws about the index itself: unreachable, not
         // configured, or malformed.  The caller can offer a local file instead.
         output.appendLine(`firmware index unavailable: ${(err as Error).message}`);
