@@ -116,6 +116,53 @@ export const SERIAL_BOOTLOADERS: {
     },
 ];
 
+/**
+ * How to reach the bootloader, keyed by the USB identity a board shows while
+ * it is running normally.
+ *
+ * The gesture is not the same on every board, and getting it wrong is not a
+ * nicety: **a Raspberry Pi Pico has no RESET button at all.**  It has one
+ * button, marked BOOTSEL, and the way in is to hold it while the USB cable is
+ * plugged in.  Telling that user to "hold BOOT and tap RESET" asks them to
+ * press a button their board does not have, on the single manual step in the
+ * whole product.
+ *
+ * Matched against the running device, because at the moment this is shown
+ * nothing is in a bootloader yet -- that is what we are waiting for.
+ */
+export const BOOTLOADER_HINTS: { vid: number; pid: number; hint: string }[] = [
+    {
+        // Pico and Pico 2, ours or stock -- deliberately the same identity.
+        vid: 0x2e8a, pid: 0x0005,
+        hint: "Unplug the board, then plug the USB cable back in while holding BOOTSEL.",
+    },
+    {
+        vid: 0x239a, pid: 0x80f8,
+        hint: "Hold BOOT, tap RESET, then release BOOT.",
+    },
+    {
+        // ESP32-S2/S3 running this firmware (two CDCs).
+        vid: 0x303a, pid: 0x4002,
+        hint: "Hold BOOT, tap RESET, then release BOOT.",
+    },
+    {
+        // ESP32-S2/S3 running stock MicroPython (one CDC) -- the case a new
+        // user is in before they have ever installed this firmware.
+        vid: 0x303a, pid: 0x4001,
+        hint: "Hold BOOT, tap RESET, then release BOOT.",
+    },
+    {
+        vid: 0x1b9f, pid: 0xf105,
+        hint: "Hold LDR, tap RESET, then release LDR.",
+    },
+];
+
+/** Used when no board we recognise is connected, so it has to cover both styles. */
+export const GENERIC_BOOTLOADER_HINT =
+    "Hold the BOOT button and tap RESET, then release BOOT. If your board has no "
+    + "RESET button -- a Raspberry Pi Pico has only BOOTSEL -- hold the button "
+    + "while plugging the USB cable in instead.";
+
 /** Every board this extension can flash, for manual selection and messages. */
 export function allBoards(): BootBoard[] {
     const out: BootBoard[] = [];

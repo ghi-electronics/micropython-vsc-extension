@@ -87,6 +87,26 @@ BOARDS = [
         "esp_build": "ports/esp32/build-SEEED_XIAO_ESP32S3",
         "publish": "micropython-xiao-esp32s3-v{version}.bin",
     },
+    {
+        # One build for the whole category of no-name S3 modules.  Verified on
+        # a HiLetgo N16R8 DevKitC-1 and applicable to a Hosyond 320x480 touch
+        # board measured as the same module: 8 MB octal PSRAM, differing flash
+        # (8/16 MB) and differing flash vendors (GigaDevice, Zbit, Puya).
+        #
+        # Flash size does not need its own build: MicroPython reads the physical
+        # chip size at boot and creates the filesystem from the end of the
+        # application to the end of flash (ports/esp32/main.c), so this covers
+        # 4, 8 and 16 MB parts alike.
+        "id": "ESP32_GENERIC_S3-SPIRAM_OCT",
+        "name": "ESP32-S3 with 8 MB PSRAM (N8R8, N16R8)",
+        "kind": "esp-rom",
+        "bootloader": {"usb": {"vid": "0x303A", "pid": "0x1001"}},
+        "chip": "ESP32-S3",
+        "resetBefore": "usb_reset",
+        "address": 0,
+        "esp_build": "ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT",
+        "publish": "micropython-esp32-s3-octal-psram-v{version}.bin",
+    },
 ]
 
 

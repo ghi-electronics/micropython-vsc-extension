@@ -11,7 +11,10 @@
  */
 
 import type { BootBoard, FlashKind } from "./boards";
-import { SERIAL_BOOTLOADERS, familyForBoardId } from "./boards";
+import {
+    BOOTLOADER_HINTS, GENERIC_BOOTLOADER_HINT,
+    SERIAL_BOOTLOADERS, familyForBoardId,
+} from "./boards";
 import { findUf2Drives, type Uf2Drive } from "./drives";
 
 // serialport is loaded lazily for the same reason deviceLink.ts does it: it is
@@ -104,6 +107,31 @@ export async function detectBootloaders(): Promise<DetectedBoot[]> {
     }
 
     return out;
+}
+
+/**
+ * The right way to reach the bootloader on whatever board is plugged in.
+ *
+ * Falls back to wording that covers both styles when nothing recognisable is
+ * connected -- which is also the case where the user most needs it, since we
+ * cannot look at their board for them.
+ */
+export async function bootloaderHint(): Promise<string> {
+    try {
+        const ports = await serialport().SerialPort.list();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const p of ports as any[]) {
+            const vid = parseInt(p.vendorId ?? "", 16);
+            const pid = parseInt(p.productId ?? "", 16);
+            const hit = BOOTLOADER_HINTS.find((h) => h.vid === vid && h.pid === pid);
+            if (hit) {
+                return hit.hint;
+            }
+        }
+    } catch {
+        // No serialport, or no permission. The generic wording still applies.
+    }
+    return GENERIC_BOOTLOADER_HINT;
 }
 
 /** Outcome of waiting for a board, so the caller can say what happened. */

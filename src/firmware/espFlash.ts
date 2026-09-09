@@ -61,8 +61,14 @@ const DISCONNECTED =
  * esptool-js retries internally and has no overall deadline, so without this a
  * board that stops answering (a pulled cable, a brownout) leaves the progress
  * notification frozen with no way out but reloading the window.
+ *
+ * Generous because a full chip erase is legitimately silent for a long time:
+ * it is one flash command with no progress reporting, and on a 16 MB part it
+ * ran well past 30 seconds -- the watchdog killed a perfectly good erase.  Two
+ * minutes still catches a board that has genuinely gone away, which is the
+ * only thing this is for.
  */
-const FLASH_STALL_MS = 30_000;
+const FLASH_STALL_MS = 120_000;
 
 /**
  * Give up waiting for the serial port to open.
@@ -250,6 +256,8 @@ export interface EspFlashOptions extends EspConnectOptions {
      */
     expectedChip?: string;
     onProgress: (written: number, total: number) => void;
+    /** Notable lines from the loader, for the progress notification. */
+    onStatus?: (line: string) => void;
     /** Overrides for diagnosing a board that refuses a write. */
     compress?: boolean;
     flashSize?: string;
@@ -300,10 +308,19 @@ async function withLoader<T>(
 ): Promise<T> {
     const { ESPLoader, Transport } = esptool();
 
+    const note = (data: string) => {
+        opts.log(data);
+        // Only the lines that explain a long silence are worth putting in front
+        // of the user; the rest belong in the output channel.
+        if (/eras|writ|compress|connect/i.test(data)) {
+            (opts as { onStatus?: (l: string) => void }).onStatus?.(data.trim());
+        }
+    };
+
     const terminal: IEspLoaderTerminal = {
         clean: () => { /* the output channel is append-only */ },
-        writeLine: (data: string) => opts.log(data),
-        write: (data: string) => opts.log(data),
+        writeLine: note,
+        write: note,
     };
 
     const shim = new NodeWebSerialPort(opts.port, opts.vendorId, opts.productId);
@@ -423,7 +440,17 @@ export async function flashEsp(opts: EspFlashOptions): Promise<void> {
             flashMode: "keep",
             flashFreq: "keep",
             flashSize: (opts.flashSize ?? "keep") as never,
-            eraseAll: false,
+            // Erase the whole chip, not just the region being written.
+            //
+            // The confirm dialog promises the device's files are erased, and
+            // until this was set it was not true: only the ~1.8 MB image was
+            // overwritten and everything above it survived.  A board that
+            // previously ran different MicroPython firmware then boots, finds a
+            // filesystem it cannot mount and will not reformat, and reboots --
+            // "The filesystem appears to be corrupted" forever, with USB never
+            // coming up.  Measured on a 16 MB N16R8 board that had stock
+            // MicroPython on it.
+            eraseAll: true,
             compress: opts.compress ?? true,
             reportProgress: (_i: number, written: number, total: number) => {
                 keepAlive();

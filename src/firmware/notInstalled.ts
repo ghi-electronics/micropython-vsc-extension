@@ -49,7 +49,12 @@ async function waitForBoard(): Promise<string | undefined> {
             cancellable: true,
         },
         async (progress, token) => {
-            progress.report({ message: "Tap RESET on the board if it does not appear." });
+            // An rp2 board restarts itself the moment the .uf2 lands; an ESP32
+            // cannot be restarted over the wire and has to be tapped.  Rather
+            // than guess which one this is, say the thing that works for both.
+            progress.report({
+                message: "If it does not appear, tap RESET -- or unplug it and plug it back in.",
+            });
             return Promise.race([
                 waitForDebugPort(),
                 new Promise<undefined>((resolve) => {

@@ -21,7 +21,9 @@
 import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import { allBoards, type BootBoard } from "./boards";
-import { detectBootloaders, waitForBootloader, type DetectedBoot } from "./detect";
+import {
+    bootloaderHint, detectBootloaders, waitForBootloader, type DetectedBoot,
+} from "./detect";
 import { writeUf2 } from "./drives";
 import { EspNotRespondingError, flashEsp, probeEspChip } from "./espFlash";
 import {
@@ -51,6 +53,11 @@ const LAST_BOARD_KEY = "firmware.lastBoardId";
 async function promptForBootloader(
     verify: (board: DetectedBoot) => Promise<boolean>,
 ): Promise<DetectedBoot[] | undefined> {
+    // Asked before the notification opens: the instruction differs per board,
+    // and it is read from whatever is plugged in right now, because nothing is
+    // in a bootloader yet -- that is what we are about to wait for.
+    const hint = await bootloaderHint();
+
     const result = await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -58,9 +65,7 @@ async function promptForBootloader(
             cancellable: true,
         },
         async (progress, token) => {
-            progress.report({
-                message: "Hold the BOOT button (LDR on SITCore) and tap RESET, then release BOOT.",
-            });
+            progress.report({ message: hint });
             return waitForBootloader(() => token.isCancellationRequested, verify);
         });
 
@@ -69,8 +74,9 @@ async function promptForBootloader(
     }
     if (result.kind === "timeout") {
         fail("No board found",
-            "Nothing appeared in a bootloader. Check the USB cable, then hold BOOT " +
-            "(LDR on SITCore), tap RESET, release BOOT, and run the command again.");
+            `Nothing appeared in a bootloader. Check the USB cable, then try again.
+
+${hint}`);
         return undefined;
     }
     return result.boards;
@@ -134,6 +140,37 @@ async function pickBootloader(boards: DetectedBoot[]): Promise<DetectedBoot | un
     return pick?.board;
 }
 
+/**
+ * Offer a list of boards, most-recently-used first, and remember the answer.
+ *
+ * Shared so the ambiguity prompt and the "not my board" escape hatch look and
+ * behave identically.
+ */
+async function pickFrom(
+    context: vscode.ExtensionContext,
+    choices: BootBoard[],
+    title: string,
+    placeHolder: string,
+): Promise<BootBoard | undefined> {
+    const last = context.globalState.get<string>(LAST_BOARD_KEY);
+    const items = [...choices].sort((a, b) =>
+        (a.id === last ? -1 : 0) - (b.id === last ? -1 : 0));
+
+    const pick = await vscode.window.showQuickPick(
+        items.map((b) => ({
+            label: b.name,
+            description: b.id === last ? "used last time" : undefined,
+            detail: b.id,
+            board: b,
+        })),
+        { title, placeHolder, ignoreFocusOut: true });
+
+    if (pick) {
+        await context.globalState.update(LAST_BOARD_KEY, pick.board.id);
+    }
+    return pick?.board;
+}
+
 /** Every board the index publishes for a given flashing mechanism. */
 function publishedFor(manifest: Manifest, kind: DetectedBoot["kind"]): BootBoard[] {
     return manifest.families
@@ -186,31 +223,13 @@ async function chooseBoard(
         return undefined;
     }
 
-    const last = context.globalState.get<string>(LAST_BOARD_KEY);
-    const items = [...choices].sort((a, b) =>
-        (a.id === last ? -1 : 0) - (b.id === last ? -1 : 0));
-
-    const pick = await vscode.window.showQuickPick(
-        items.map((b) => ({
-            label: b.name,
-            description: b.id === last ? "used last time" : undefined,
-            detail: unrecognised ? b.id : undefined,
-            board: b,
-        })),
-        {
-            title: unrecognised
-                ? `Unrecognised bootloader (${found.label}) -- which board is this?`
-                : `Which ${found.label} board is this?`,
-            placeHolder: unrecognised
-                ? "Pick your board. Choosing wrongly is recoverable: hold BOOT, tap RESET, and flash again"
-                : "The bootloader does not identify the board, so this has to be confirmed",
-            ignoreFocusOut: true,
-        });
-
-    if (pick) {
-        await context.globalState.update(LAST_BOARD_KEY, pick.board.id);
-    }
-    return pick?.board;
+    return pickFrom(context, choices,
+        unrecognised
+            ? `Unrecognised bootloader (${found.label}) -- which board is this?`
+            : `Which ${found.label} board is this?`,
+        unrecognised
+            ? "Pick your board. Choosing wrongly is recoverable: hold BOOT, tap RESET, and flash again"
+            : "The bootloader does not identify the board, so this has to be confirmed");
 }
 
 /**
@@ -267,7 +286,7 @@ async function flash(
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: `Flashing ${entry.name}`,
+            title: `Installing on ${entry.name}`,
             cancellable: false,
         },
         async (progress) => {
@@ -280,6 +299,10 @@ async function flash(
 
             const report = percentReporter(progress, "Wrote");
             await flashEsp({
+                // esptool says "Erasing flash (this may take a while)..." and
+                // then goes quiet for a minute on a large chip.  Showing that
+                // is the difference between "working" and "hung".
+                onStatus: (line) => progress.report({ message: line }),
                 port: found.port!,
                 vendorId: found.vendorId ?? 0,
                 productId: found.productId ?? 0,
@@ -298,10 +321,10 @@ function reportDone(found: DetectedBoot, entry: FirmwareFamily): void {
     // A native-USB ESP32 has nothing wired to DTR/RTS, so it cannot be restarted
     // from here.  Saying so beats leaving the board looking dead.
     const detail = found.kind === "uf2-drive"
-        ? "The board has restarted and is running the new firmware."
-        : "Tap RESET on the board to start the new firmware.";
+        ? "The board has restarted. Press F5 to start debugging."
+        : "Tap RESET on the board, then press F5 to start debugging.";
     void vscode.window.showInformationMessage(
-        `${entry.name} updated to ${entry.version}`,
+        `Your ${entry.name} is ready to debug`,
         { modal: true, detail }, "OK");
 }
 
@@ -425,7 +448,7 @@ async function updateFirmwareInner(
         return "cancelled";
     }
 
-    const entry = manifest.families.find((f) => f.id === board.id);
+    let entry = manifest.families.find((f) => f.id === board.id);
     if (!entry) {
         fail(`No firmware published for ${board.name}`,
             `The firmware list has no entry with the id "${board.id}". ` +
@@ -433,17 +456,49 @@ async function updateFirmwareInner(
         return "failed";
     }
 
-    const go = await vscode.window.showWarningMessage(
-        `Install ${entry.name} firmware ${entry.version}?`,
-        {
-            modal: true,
-            detail:
-                "This replaces the firmware and erases files stored on the device." +
-                (stale ? "\n\nThe firmware list could not be refreshed; using the cached copy." : ""),
-        },
-        "Install");
-    if (go !== "Install") {
-        return "cancelled";
+    // The board named here is often an assumption, not a fact: a bootloader
+    // reports its chip, not its board, so every RP2350 board is offered Pico 2
+    // firmware and every RP2040 one of two others.  That is usually right, and
+    // always worth being able to overrule -- with no way out, someone holding a
+    // different RP2350 board concludes they need the exact board named, and
+    // gives up.
+    for (;;) {
+        // No version string here.  It means nothing to the person reading it
+        // and a build id in a dialog reads as something having gone wrong; it
+        // goes to the output channel instead, where support can find it.
+        output.appendLine(`installing ${entry.id} ${entry.version}`);
+
+        const go = await vscode.window.showWarningMessage(
+            `Add real debugging to your ${entry.name}?`,
+            {
+                modal: true,
+                detail:
+                    "Files stored on the device will be erased." +
+                    (stale ? "\n\nUsing the firmware list saved from last time." : ""),
+            },
+            "Install", "Choose a Different Board");
+
+        if (go === "Install") {
+            break;
+        }
+        if (go !== "Choose a Different Board") {
+            return "cancelled";
+        }
+
+        const other = await pickFrom(
+            context, publishedFor(manifest, found.kind),
+            "Which board do you have?",
+            "Every board with published firmware for this bootloader");
+        if (!other) {
+            return "cancelled";
+        }
+        const swapped = manifest.families.find((f) => f.id === other.id);
+        if (!swapped) {
+            fail(`No firmware published for ${other.name}`,
+                `The firmware list has no entry with the id "${other.id}".`);
+            return "failed";
+        }
+        entry = swapped;
     }
 
     let data: Buffer;
@@ -451,7 +506,7 @@ async function updateFirmwareInner(
         data = await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: `Downloading ${entry.name} ${entry.version}`,
+                title: `Downloading firmware for ${entry.name}`,
                 cancellable: true,
             },
             async (progress, token) => {
