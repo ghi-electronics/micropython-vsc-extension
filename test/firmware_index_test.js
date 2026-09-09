@@ -121,6 +121,37 @@ function check(name, ok, detail) {
     }
 }
 
+// --- an unrecognised bootloader must still be flashable ---------------------
+//
+// A board newer than this extension, or one we carry no firmware for, still
+// presents a real UF2 bootloader.  Reporting "no board found" while it sits
+// there in BOOTSEL is the worst answer available, so the drive is reported with
+// no candidates and the caller offers the published list instead.
+{
+    const CRLF = String.fromCharCode(13, 10);
+    const unknown = boards.parseInfoUf2(
+        ["UF2 Bootloader v3.0", "Model: Something New",
+         "Board-ID: NOT-A-BOARD-WE-KNOW", ""].join(CRLF));
+    check("an unknown drive still parses as a UF2 bootloader",
+        unknown.boardId === "NOT-A-BOARD-WE-KNOW", JSON.stringify(unknown));
+    check("but matches no known family",
+        boards.familyForBoardId(unknown.boardId) === undefined);
+
+    // The fallback list has to be non-empty, or the offer is useless.
+    const uf2 = boards.allBoards().filter((b) => b.kind === "uf2-drive");
+    const esp = boards.allBoards().filter((b) => b.kind === "esp-rom");
+    check("there are uf2 boards to offer as a fallback",
+        uf2.length > 0, uf2.map((b) => b.id).join(", "));
+    check("there are esp boards to offer as a fallback",
+        esp.length > 0, esp.map((b) => b.id).join(", "));
+
+    // Every board offered must be flashable: an esp board with no chip named
+    // cannot be checked against the part that answers.
+    const noChip = esp.filter((b) => !b.chip);
+    check("every esp board declares its chip",
+        noChip.length === 0, noChip.map((b) => b.id).join(", "));
+}
+
 // --- the digest check is the last line of defence, so prove it rejects -------
 {
     const good = Buffer.from("firmware image");

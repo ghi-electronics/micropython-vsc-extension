@@ -63,15 +63,18 @@ export async function detectBootloaders(): Promise<DetectedBoot[]> {
 
     for (const drive of await findUf2Drives()) {
         const fam = familyForBoardId(drive.boardId);
-        if (!fam) {
-            // A UF2 drive we do not recognise: some other board entirely.  Skip
-            // it rather than offer to write firmware onto it.
-            continue;
-        }
+        // A drive we do not recognise is still reported, with no candidates.
+        //
+        // INFO_UF2.TXT is proof that a UF2 bootloader is present, even when the
+        // Board-ID means nothing to this build -- a board released after it, or
+        // one we simply do not carry firmware for.  Dropping it here produced
+        // the worst possible answer, "no board found", while the board sat in
+        // its bootloader in plain sight.  The caller offers the published list
+        // instead and lets the user say which board it is.
         out.push({
             kind: "uf2-drive",
-            label: fam.label,
-            candidates: fam.boards,
+            label: fam ? fam.label : (drive.model ?? drive.boardId),
+            candidates: fam ? fam.boards : [],
             drive,
         });
     }

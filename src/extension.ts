@@ -13,6 +13,7 @@ import { DeviceLink, findPorts } from "./deviceLink";
 import { Cond } from "./protocol";
 import { openDeviceShell } from "./replTerminal";
 import { updateFirmware, flashFromFile } from "./firmware/updateFirmware";
+import { offerFirmwareInstall } from "./firmware/notInstalled";
 
 const output = vscode.window.createOutputChannel("MicroPython SITCore");
 
@@ -36,7 +37,10 @@ export function activate(context: vscode.ExtensionContext): void {
             "micropython-sitcore.newProject", () => { void newProject(); }),
         vscode.commands.registerCommand(
             "micropython-sitcore.updateFirmware",
-            () => { void updateFirmware(context, output); }),
+            // Returns its result: the firmware-install offer needs to know
+            // whether the index was simply unreachable, so it can suggest a
+            // local file rather than leaving the user with nowhere to go.
+            () => updateFirmware(context, output)),
         vscode.commands.registerCommand(
             "micropython-sitcore.flashFromFile",
             () => { void flashFromFile(context, output); }),
@@ -118,14 +122,18 @@ async function openShell(): Promise<void> {
  */
 async function withDevice<T>(fn: (link: DeviceLink) => Promise<T>): Promise<T | undefined> {
     const ports = await findPorts();
-    if (!ports.debug) {
+    let debugPort = ports.debug;
+    if (!debugPort) {
+        debugPort = await offerFirmwareInstall();
+    }
+    if (!debugPort) {
         void vscode.window.showErrorMessage(
             "No debug port found. The board must be running this MicroPython firmware.");
         return undefined;
     }
     const link = new DeviceLink();
     try {
-        await link.open(ports.debug);
+        await link.open(debugPort);
         return await fn(link);
     } catch (e) {
         void vscode.window.showErrorMessage((e as Error).message);

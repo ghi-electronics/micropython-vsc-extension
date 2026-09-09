@@ -14,6 +14,7 @@ import { DebugProtocol } from "@vscode/debugprotocol";
 import * as path from "path";
 import * as fs from "fs";
 import { DeviceLink, findPorts, StackFrameInfo, DeviceCapabilities, DeviceVariable } from "./deviceLink";
+import { offerFirmwareInstall } from "./firmware/notInstalled";
 import { Cond, RebootFlag, StepMode, StopReason, STOP_REASON_TO_DAP, Scope as DevScope } from "./protocol";
 import { crc32 } from "./wireProtocol";
 import { deriveLocalNames, verifyAgainstDevice } from "./localNames";
@@ -131,7 +132,15 @@ export class MicroPythonDebugSession extends DebugSession {
             this.entryName = path.basename(args.program);
 
             const ports = await findPorts();
-            const devicePort = args.device || ports.debug;
+            let devicePort = args.device || ports.debug;
+            if (!devicePort) {
+                // The commonest first experience: the extension is new, the
+                // board is running whatever it shipped with, and F5 has just
+                // been pressed.  Offer to fix it rather than explaining why it
+                // cannot work -- and if the user accepts, carry on with the
+                // session they actually asked for.
+                devicePort = await offerFirmwareInstall();
+            }
             if (!devicePort) {
                 throw new Error(
                     "No debug port found. The board must be running this MicroPython "

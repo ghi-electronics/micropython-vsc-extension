@@ -6,6 +6,18 @@
  * Both decide whether a breakpoint fires, and both fail silently when wrong --
  * a breakpoint that never triggers looks identical to code that never runs.
  */
+// debugSession reaches vscode through the firmware-install offer it makes when
+// F5 finds no debug port. None of that is under test here, and vscode cannot be
+// loaded outside the extension host, so it is stubbed before the require.
+const Module = require("module");
+const realLoad = Module._load;
+Module._load = function (request) {
+    if (request === "vscode") {
+        return { window: {}, commands: {}, ProgressLocation: {} };
+    }
+    return realLoad.apply(this, arguments);
+};
+
 const { trimToTail } = require("../out/deviceLink");
 const { MicroPythonDebugSession } = require("../out/debugSession");
 
