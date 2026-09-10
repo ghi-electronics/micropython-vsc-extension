@@ -14,6 +14,7 @@ import { Cond } from "./protocol";
 import { openDeviceShell } from "./replTerminal";
 import { updateFirmware, flashFromFile } from "./firmware/updateFirmware";
 import { offerFirmwareInstall } from "./firmware/notInstalled";
+import { chooseProgram, hasMicroPythonConfig } from "./launchConfig";
 
 const output = vscode.window.createOutputChannel("MicroPython Debugger");
 
@@ -72,15 +73,20 @@ class ConfigProvider implements vscode.DebugConfigurationProvider {
     ): vscode.ProviderResult<vscode.DebugConfiguration> {
         if (!config.type && !config.request && !config.name) {
             const editor = vscode.window.activeTextEditor;
-            if (editor?.document.languageId !== "python") {
+            const active = editor?.document.languageId === "python"
+                ? editor.document.fileName
+                : undefined;
+            const program = chooseProgram(folder?.uri.fsPath, active);
+            if (!program) {
                 void vscode.window.showErrorMessage(
-                    "Open a Python file, or create a launch configuration.");
+                    "No main.py in this folder. Open the Python file to run, or "
+                    + "create a launch configuration.");
                 return undefined;
             }
             config.type = "micropython";
             config.name = "Deploy and Debug (MicroPython, USB)";
             config.request = "launch";
-            config.program = editor.document.fileName;
+            config.program = program;
             config.sync = true;
         }
         if (!config.program) {
@@ -298,24 +304,58 @@ function writeLaunchJson(root: string): boolean {
 }
 
 /**
- * Offer to save a launch configuration after a session that ran without one.
+ * Offer a launch configuration after a session that ran without one.
  *
- * F5 works with no launch.json -- the configuration provider fills one in -- but
- * VS Code then asks which debugger to use every single time, and that list also
- * offers debuggers that will happily run the file on the PC instead of the
- * board. One file removes both problems, so it is offered once and not nagged.
+ * F5 works with no launch.json -- the configuration provider fills one in --
+ * but VS Code then asks which debugger to use every single time, and that list
+ * also offers debuggers that will happily run the file on the PC instead of the
+ * board. One configuration removes both problems, so it is offered once per
+ * folder and not nagged.
+ *
+ * There are two ways to be missing a configuration, and they need different
+ * answers. With no launch.json, writing one is safe. With a launch.json that
+ * has no MicroPython entry, it is not: the file is JSONC, and reading it in to
+ * add an entry would strip the comments its author wrote. VS Code has no API
+ * for appending a configuration, so this points at the snippet instead, which
+ * inserts one block and leaves the rest of the file untouched.
  */
-let launchJsonOffered = false;
+const launchJsonOffered = new Set<string>();
 
 async function offerLaunchJson(session: vscode.DebugSession): Promise<void> {
-    if (session.type !== "micropython" || launchJsonOffered) {
+    const folder = session.workspaceFolder;
+    if (session.type !== "micropython" || !folder) {
         return;
     }
-    const root = session.workspaceFolder?.uri.fsPath;
-    if (!root || fs.existsSync(path.join(root, ".vscode", "launch.json"))) {
+    const root = folder.uri.fsPath;
+    if (launchJsonOffered.has(root)) {
         return;
     }
-    launchJsonOffered = true;
+
+    // Ask VS Code, not the filesystem: a launch.json existing is not the same
+    // as this debugger being configured in it, and conflating the two is what
+    // leaves a project silently unable to reach the board on F5.
+    const configured = hasMicroPythonConfig(
+        vscode.workspace.getConfiguration("launch", folder.uri)
+            .get("configurations"));
+    if (configured) {
+        return;
+    }
+    launchJsonOffered.add(root);
+
+    const file = path.join(root, ".vscode", "launch.json");
+    if (fs.existsSync(file)) {
+        const answer = await vscode.window.showInformationMessage(
+            "This project's launch.json has no MicroPython configuration, so F5 "
+            + "will not start this debugger on its own. Add one with "
+            + "\"Add Configuration...\".",
+            "Open launch.json", "Not now");
+        if (answer === "Open launch.json") {
+            await vscode.window.showTextDocument(
+                await vscode.workspace.openTextDocument(file));
+        }
+        return;
+    }
+
     const answer = await vscode.window.showInformationMessage(
         "Save a launch configuration so F5 starts this debugger directly?",
         "Save", "Not now");
