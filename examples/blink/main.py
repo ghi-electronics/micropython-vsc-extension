@@ -19,9 +19,6 @@
 from machine import Pin
 import time
 
-# The LED pin on your board -- edit this line.  Pico and Pico 2 use 25, the
-# Seeed XIAO ESP32-S3 uses 21.  A QT Py RP2040 has no plain LED (only a
-# NeoPixel, data 12 and power 11) and a generic ESP32-S2 module has none.
 LED_PIN = 21
 DELAY_MS = 500
 

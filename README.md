@@ -58,10 +58,9 @@ Starting from an empty folder? **MicroPython: New Project** writes a sample `mai
 | **STM32L452** | [SC13xxx family (GHI Electronics)](https://www.ghielectronics.com/tinyclr/) |
 | **STM32H743** | [SC20xxx family (GHI Electronics)](https://www.ghielectronics.com/tinyclr/) |
 
-Clicking a board name downloads the exact `.uf2` or `.bin` file for that device. Or
-browse the whole [firmware folder](https://github.com/ghi-electronics/micropython-vsc-extension/tree/main/docs/firmware).
-Any board running compatible MicroPython firmware works — the list above is what has been
-tested and what ships with the extension.
+Click a board to download the firmware and flash it yourself. Or run
+**MicroPython: Update Device Firmware** in the Command Palette, pick your board,
+and follow the instructions.
 
 [pico]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico-v1.29.0-33-g25afef4534.uf2
 [pico2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico2-v1.29.0-33-g25afef4534.uf2
