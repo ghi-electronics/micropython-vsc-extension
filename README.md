@@ -37,8 +37,8 @@ on the real line, with the real values in scope.
 
 ## Getting started
 
-1. Flash the [MicroPython firmware](https://www.ghielectronics.com).
-2. Open a folder containing a `.py` file.
+1. Flash the MicroPython firmware for your board (see [Supported hardware](#supported-hardware) below).
+2. Open a folder containing `.py` files (compiled `.mpy` libraries work too).
 3. Press **F5**, and pick *MicroPython*.
 
 That is the whole setup — no `launch.json`, no project file, no Python environment. The
@@ -46,6 +46,29 @@ extension offers to save a launch configuration afterwards so F5 stops asking.
 
 Starting from an empty folder? **MicroPython: New Project** writes a sample `main.py`, a
 `lib/` directory and a launch configuration.
+
+## Supported hardware
+
+| Chip | Boards |
+|---|---|
+| **RP2040** | [Raspberry Pi Pico][pico], [Adafruit QT Py RP2040][qtpy-rp2040] |
+| **RP2350** | [Raspberry Pi Pico 2][pico2] |
+| **ESP32-S2** | [Adafruit QT Py ESP32-S2 and generic ESP32-S2 modules][esp32-s2] |
+| **ESP32-S3** | [ESP32-S3 N16R8 Development Board][esp32-s3-octal], [Seeed XIAO ESP32-S3][xiao-s3], [Hosyond ESP32-S3 Touchscreen Module (3.5″)][esp32-s3-octal] |
+| **STM32L452** | [SC13xxx family (GHI Electronics)](https://www.ghielectronics.com/tinyclr/) |
+| **STM32H743** | [SC20xxx family (GHI Electronics)](https://www.ghielectronics.com/tinyclr/) |
+
+Clicking a board name downloads the exact `.uf2` or `.bin` file for that device. Or
+browse the whole [firmware folder](https://github.com/ghi-electronics/micropython-vsc-extension/tree/main/docs/firmware).
+Any board running compatible MicroPython firmware works — the list above is what has been
+tested and what ships with the extension.
+
+[pico]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico-v1.29.0-33-g25afef4534.uf2
+[pico2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico2-v1.29.0-33-g25afef4534.uf2
+[qtpy-rp2040]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-qtpy-rp2040-v1.29.0-33-g25afef4534.uf2
+[esp32-s2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s2-v1.29.0-33-g25afef4534.bin
+[xiao-s3]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-xiao-esp32s3-v1.29.0-33-g25afef4534.bin
+[esp32-s3-octal]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-psram-v1.29.0-33-g25afef4534.bin
 
 ## Commands
 
@@ -94,8 +117,7 @@ Data files are deployed only if you list them, since the filesystem is small:
 
 ## Requirements
 
-- A device running the [MicroPython firmware](https://www.ghielectronics.com) supported
-  by GHI Electronics
+- A device running the MicroPython firmware — see [Supported hardware](#supported-hardware)
 - VS Code 1.85 or newer
 
 Windows, Linux and macOS are all supported, and everything needed ships inside the
