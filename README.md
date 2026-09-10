@@ -12,6 +12,8 @@ on the real line, with the real values in scope.
 
 ![MicroPython Debugger stopped on a breakpoint on a real board, showing locals, a watch expression, the call stack and program output](images/screenshot.jpg)
 
+*Stopped on a breakpoint on a real board — locals, watch, call stack, and program output all live.*
+
 ## What you get
 
 | | |
