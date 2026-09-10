@@ -19,9 +19,7 @@
   },
   "categories": [
     "Debuggers",
-    "Programming Languages",
-    "Testing",
-    "Other"
+    "Programming Languages"
   ],
   "activationEvents": [
     "onDebugResolve:micropython",
@@ -70,7 +68,7 @@
       "properties": {
         "micropython-debugger.firmwareManifestUrl": {
           "type": "string",
-          "default": "https://www.ghielectronics.com/bin/fw/micropython_firmware.json",
+          "default": "https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython_firmware.json",
           "markdownDescription": "URL of the firmware index used by **MicroPython: Update Device Firmware**. The default points at the published firmware; change it only to test a different index, or clear it to disable firmware updates and use *Flash Firmware from File* instead."
         }
       }
@@ -189,9 +187,6 @@
     "repl",
     "firmware",
     "ghi electronics",
-    "sitcore",
-    "tinyclr",
-    "fez",
     "stm32",
     "esp32",
     "esp32-s2",

@@ -28,8 +28,9 @@ import pathlib
 import subprocess
 import sys
 
-# Where published firmware lives on the website, matching tinyclr's /bin/fw.
-PUBLISH_DIR = "/bin/fw"
+# URLs in the index are bare filenames. They resolve relative to the JSON's
+# location, which is `docs/firmware/micropython_firmware.json` on the raw
+# GitHub URL, so every binary sits next to the index.
 
 # One entry per shipped board.
 #
@@ -261,7 +262,7 @@ def main():
             # so rebuilding and re-running this is the whole edit cycle.
             url = pathlib.Path(path).resolve().as_uri()
         else:
-            url = "%s/%s" % (PUBLISH_DIR, board["publish"].format(version=version))
+            url = board["publish"].format(version=version)
 
         entry = {
             "id": board["id"],

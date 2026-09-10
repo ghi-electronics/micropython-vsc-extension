@@ -15,11 +15,12 @@ build-extension.bat
 install_vsix.bat
 *.vsix
 
-# The README points at the copy hosted on ghielectronics.com, because a
-# relative path would be rewritten to this repository's raw URL and this
-# repository is private. So the master here is 358 KB of dead weight in a .vsix.
+# The 2375x1543 master. images/screenshot.jpg is the resized copy the README
+# points at; this original would only ever bloat the .vsix.
 demo.jpg
 
-# Generated at release time and fetched from the website at run time; a stale
-# copy bundled here would only ever be misleading.
+# Firmware is fetched from the raw GitHub URL at run time (see
+# `micropython-debugger.firmwareManifestUrl` in package.json), so the local
+# copies here would only bloat the .vsix without ever being read.
+docs/**
 micropython_firmware.json
