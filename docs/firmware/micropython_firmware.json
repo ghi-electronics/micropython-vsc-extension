@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "source": "DebuggerExtension/micropython-vsc-extension/tools/make_firmware_index.py",
+  "families": [    
+    {
+      "id": "RPI_PICO",
+      "device_support": "Raspberry Pi Pico",
+      "kind": "uf2-drive",
+      "bootloader": {
+        "boardId": "RPI-RP2"
+      },
+      "version": "1.29.0-33-g25afef4534",
+      "date": "2026-09-09",
+      "url": "/bin/fw/micropython-rpi-pico-v1.29.0-33-g25afef4534.uf2",
+      "md5": "624E67E8026D61BD04239841BB39CE3A",
+      "size": 732160,
+      "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
+    },
+    {
+      "id": "RPI_PICO2",
+      "device_support": "Raspberry Pi Pico 2",
+      "kind": "uf2-drive",
+      "bootloader": {
+        "boardId": "RP2350"
+      },
+      "version": "1.29.0-33-g25afef4534",
+      "date": "2026-09-09",
+      "url": "/bin/fw/micropython-rpi-pico2-v1.29.0-33-g25afef4534.uf2",
+      "md5": "04E957EAA8B6AB550A2DC91808A35FCC",
+      "size": 710144,
+      "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
+    },
+    {
+      "id": "ADAFRUIT_QTPY_RP2040",
+      "device_support": "Adafruit QT Py RP2040",
+      "kind": "uf2-drive",
+      "bootloader": {
+        "boardId": "RPI-RP2"
+      },
+      "version": "1.29.0-33-g25afef4534",
+      "date": "2026-09-09",
+      "url": "/bin/fw/micropython-qtpy-rp2040-v1.29.0-33-g25afef4534.uf2",
+      "md5": "EBFBB69E517B40BE8358EE889812ACCE",
+      "size": 727552,
+      "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
+    },
+    {
+      "id": "ESP32_GENERIC_S2",
+      "device_support": "ESP32-S2",
+      "kind": "esp-rom",
+      "bootloader": {
+        "usb": {
+          "vid": "0x303A",
+          "pid": "0x0002"
+        }
+      },
+      "version": "1.29.0-33-g25afef4534",
+      "date": "2026-09-09",
+      "url": "/bin/fw/micropython-esp32-s2-v1.29.0-33-g25afef4534.bin",
+      "md5": "7042E7C554AD8D255FBD0C9DE73BD430",
+      "size": 1574944,
+      "address": 0,
+      "chip": "ESP32-S2",
+      "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
+    },
+    {
+      "id": "SEEED_XIAO_ESP32S3",
+      "device_support": "Seeed XIAO ESP32-S3",
+      "kind": "esp-rom",
+      "bootloader": {
+        "usb": {
+          "vid": "0x303A",
+          "pid": "0x1001"
+        }
+      },
+      "version": "1.29.0-33-g25afef4534",
+      "date": "2026-09-09",
+      "url": "/bin/fw/micropython-xiao-esp32s3-v1.29.0-33-g25afef4534.bin",
+      "md5": "37A8FE1AA44B0A742586FC6071127DBE",
+      "size": 1819840,
+      "address": 0,
+      "chip": "ESP32-S3",
+      "resetBefore": "usb_reset",
+      "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
+    },
+    {
+      "id": "ESP32_GENERIC_S3-SPIRAM_OCT",
+      "device_support": "ESP32-S3 with 8 MB PSRAM (N8R8, N16R8)",
+      "kind": "esp-rom",
+      "bootloader": {
+        "usb": {
+          "vid": "0x303A",
+          "pid": "0x1001"
+        }
+      },
+      "version": "1.29.0-33-g25afef4534",
+      "date": "2026-09-09",
+      "url": "/bin/fw/micropython-esp32-s3-octal-psram-v1.29.0-33-g25afef4534.bin",
+      "md5": "0F8C1F56B268E8BCE2B0BAC978B60495",
+      "size": 1822656,
+      "address": 0,
+      "chip": "ESP32-S3",
+      "resetBefore": "usb_reset",
+      "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
+    }
+  ]
+}
