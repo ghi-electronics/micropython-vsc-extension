@@ -42,21 +42,6 @@ const VARREF_GLOBALS_BASE = 1000;
 /** Locals scopes sit in their own band, above globals. */
 const VARREF_LOCALS_BASE = 2000;
 
-/** "<version> (built <ISO date> <time>)", from the installed files themselves. */
-function extensionBuildStamp(): string {
-    let version = "?";
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        version = require("../package.json").version ?? "?";
-    } catch { /* packaged layouts vary; the timestamp still tells the story */ }
-    let built = "unknown";
-    try {
-        const t = require("fs").statSync(__filename).mtime as Date;
-        built = t.toISOString().slice(0, 16).replace("T", " ");
-    } catch { /* ignore */ }
-    return `${version} (built ${built})`;
-}
-
 export class MicroPythonDebugSession extends DebugSession {
     private link = new DeviceLink();
     private programDir = "";
@@ -171,13 +156,6 @@ export class MicroPythonDebugSession extends DebugSession {
             }
 
             // Reboot into a halt so breakpoints can be set before anything runs.
-            // Version and build time read from what is actually installed, never
-            // hardcoded. The version does not change between rebuilds, so
-            // "code --install-extension" silently skips without --force and the
-            // resulting failure is indistinguishable from a hardware fault. This
-            // line is how you tell whether VS Code is running what you just built.
-            this.log(`extension ${extensionBuildStamp()}`);
-            this.log(`project ${this.programDir}, entry ${this.entryName}`);
             this.log(this.noDebug
                 ? "Running without debugging -- output only, no breakpoints."
                 : "Restarting device...");
@@ -189,8 +167,6 @@ export class MicroPythonDebugSession extends DebugSession {
 
             try {
                 this.caps = await this.link.capabilities();
-                this.log(`device protocol v${this.caps.protocol}, `
-                    + `${this.caps.maxBreakpoints} breakpoints max`);
             } catch {
                 // Older firmware without the query: fall back rather than fail
                 // the whole session over a diagnostic.
@@ -332,7 +308,7 @@ export class MicroPythonDebugSession extends DebugSession {
             if (fsInfo.rc === 0 && fsInfo.blockSize > 0) {
                 const freeBytes = fsInfo.free * fsInfo.blockSize;
                 const totalBytes = fsInfo.total * fsInfo.blockSize;
-                this.log(`filesystem ${Math.round(freeBytes / 1024)} KB free `
+                this.log(`Filesystem ${Math.round(freeBytes / 1024)} KB free `
                     + `of ${Math.round(totalBytes / 1024)} KB`);
                 // Compared against the whole filesystem, not the free space:
                 // most of a re-deploy overwrites files that are already there
@@ -365,7 +341,6 @@ export class MicroPythonDebugSession extends DebugSession {
 
             const info = await this.link.fileCrc(target);
             if (info.rc === 0 && info.size === data.length && info.crc === crc32(data)) {
-                this.log(`unchanged  ${target}`);
                 continue;
             }
 
@@ -391,7 +366,6 @@ export class MicroPythonDebugSession extends DebugSession {
                     `Could not write ${target} to the device (error ${rc}). `
                     + "The filesystem may be full.");
             }
-            this.log(`pushed     ${target} (${data.length} bytes)`);
         }
 
         await this.removeStale(deployed);
@@ -424,8 +398,9 @@ export class MicroPythonDebugSession extends DebugSession {
                 } else if (MicroPythonDebugSession.CODE_EXT.some((x) => full.endsWith(x))
                     && full !== "boot.py" && !keep.has(full)) {
                     const rc = await this.link.deleteFile(full);
-                    this.log(rc === 0 ? `removed    ${full}`
-                        : `remove failed ${full} (${rc})`);
+                    if (rc !== 0) {
+                        this.log(`remove failed ${full} (${rc})`);
+                    }
                 }
             }
         };
@@ -535,11 +510,6 @@ export class MicroPythonDebugSession extends DebugSession {
         } catch (e) {
             this.log(`breakpoints: ${(e as Error).message}`);
         }
-        // Log what was actually sent. A breakpoint that silently never fires is
-        // hard to reason about otherwise -- the usual cause is that the file
-        // moved under a line number VS Code had remembered.
-        const summary = all.map((b) => `${b.file}:${b.line}`).join(", ");
-        this.log(`breakpoints -> [${summary}] accepted ${accepted}`);
         // The device caps how many breakpoints it will hold (8). Report which
         // ones are actually in force rather than claiming all of them: VS Code
         // greys out unverified breakpoints, which is the truth the user needs.
