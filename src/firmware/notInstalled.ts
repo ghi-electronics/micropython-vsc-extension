@@ -73,7 +73,7 @@ async function waitForBoard(): Promise<string | undefined> {
  */
 export async function offerFirmwareInstall(): Promise<string | undefined> {
     const yes = await vscode.window.showWarningMessage(
-        "Do you want to install the firmware that supports real debugging?",
+        "Do you want to install the firmware that supports debugging?",
         {
             modal: true,
             detail: "This replaces the firmware on the board and erases files stored on it.",

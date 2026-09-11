@@ -147,13 +147,12 @@ and macOS need nothing.
 
 ## About GHI Electronics
 
-GHI Electronics is an embedded hardware and software company. Our primary development
-platform brings C# and .NET to embedded devices, giving developers a modern, productive
-way to build connected products with familiar .NET tools and languages.
-
-We also believe developers should have a simple way to work with MicroPython on embedded
-hardware. That is why this debugger is built on the
-[TinyCLR](https://www.ghielectronics.com/tinyclr/) debugger protocol.
+GHI Electronics is an embedded hardware and software company. We build the tools that
+make embedded development approachable — MicroPython here, and C# and .NET on our
+[TinyCLR](https://www.ghielectronics.com/tinyclr/) platform, which has been debugging
+production embedded devices for years. This extension brings the same proven debugger
+protocol to MicroPython, so the source-level experience you expect on a desktop works
+on a small board too.
 
 If you are new to GHI Electronics, take a look at our embedded devices and see where
 MicroPython fits alongside our C#/.NET platform:

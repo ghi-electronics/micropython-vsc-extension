@@ -434,7 +434,7 @@ async function updateFirmwareInner(
         output.appendLine(`installing ${entry.id} ${entry.version}`);
 
         const go = await vscode.window.showWarningMessage(
-            `Add real debugging to your ${entry.id}?`,
+            `Add debugging to your ${entry.id}?`,
             {
                 modal: true,
                 detail:

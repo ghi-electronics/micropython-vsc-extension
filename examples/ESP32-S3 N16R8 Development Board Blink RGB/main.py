@@ -25,9 +25,16 @@ COLOURS = (
     ("blue",  (0, 0, BRIGHTNESS)),
 )
 
+
+def show(name, rgb):
+    led[0] = rgb
+    led.write()
+    print(name)
+
+
 while True:
+    print("here we go")
     for name, rgb in COLOURS:
-        led[0] = rgb
-        led.write()
-        print(name)
+        show(name, rgb)
         time.sleep_ms(DELAY_MS)
+    #time.sleep_ms(DELAY_MS)
