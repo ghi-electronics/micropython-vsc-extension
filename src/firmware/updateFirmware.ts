@@ -284,8 +284,19 @@ async function flash(
             await flashEsp({
                 // esptool says "Erasing flash (this may take a while)..." and
                 // then goes quiet for a minute on a large chip.  Showing that
-                // is the difference between "working" and "hung".
-                onStatus: (line) => progress.report({ message: line }),
+                // is the difference between "working" and "hung".  The silent
+                // phases (connect, erase, compress) get a "Please wait" prefix
+                // so the notification still reads as busy while nothing else
+                // is arriving; the write phase already carries a percentage
+                // and does not need one.
+                onStatus: (line) => {
+                    const label =
+                        /^Erasing/i.test(line)    ? "erasing flash (large chips can take up to a minute)..." :
+                        /^Connecting/i.test(line) ? "connecting to the board..." :
+                        /^Compressed/i.test(line) ? "preparing image for the board..." :
+                        null;
+                    progress.report({ message: label ? `Please wait: ${label}` : line });
+                },
                 port: found.port!,
                 vendorId: found.vendorId ?? 0,
                 productId: found.productId ?? 0,
