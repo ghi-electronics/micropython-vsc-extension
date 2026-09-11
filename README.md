@@ -134,7 +134,7 @@ Data files are deployed only if you list them, since the filesystem is small:
 - A device running the MicroPython firmware with debugging support
 - VS Code 1.137 or newer
 
-Windows, Linux and macOS are all supported, and everything needed ships inside the
+Windows, Linux are all supported, and everything needed ships inside the
 extension — nothing to compile, no toolchain, no Python.
 
 ### Linux only
