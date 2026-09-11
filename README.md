@@ -124,6 +124,10 @@ Data files are deployed only if you list them, since the filesystem is small:
   logic directly in a top-level `while True:` loop, breakpoints inside that loop can be
   skipped. Move the loop body into a small function and call it from the loop — the
   breakpoint fires reliably inside the function. Under investigation.
+- **ESP32-S3 firmware update fails on Linux.** The extension's flash path aborts
+  the handshake during the USB-JTAG reset sequence on Linux. Install manually from
+  the terminal — see the Linux section under Requirements. Other boards and other
+  platforms are unaffected.
 
 ## Requirements
 
@@ -151,6 +155,36 @@ Run `ls ~/.vscode/extensions/` to find the exact folder name.
 Without it, the board cannot be opened: `/dev/ttyACM*` belongs to the `dialout` group,
 and ModemManager probes the debug channel for several seconds after every plug-in.
 Windows and macOS need nothing.
+
+#### Installing firmware on ESP32-S3 (Linux only)
+
+**MicroPython: Update Device Firmware** does not currently work for ESP32-S3
+boards on Linux (see Known limits). Install from the terminal instead:
+
+```bash
+# 1. Install esptool once, if you do not already have it.
+pip install esptool
+
+# 2. Download the current firmware for your board.
+#    XIAO ESP32-S3:
+wget https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-xiao-esp32s3-v1.29.0-34-gf7cdef69c8.bin
+#    Generic ESP32-S3 with 8 MB octal PSRAM (N8R8, N16R8):
+# wget https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-psram-v1.29.0-34-gf7cdef69c8.bin
+
+# 3. Put the board in BOOT mode (hold BOOT, tap RESET, release BOOT),
+#    confirm which port it appeared as (typically /dev/ttyACM0):
+ls /dev/ttyACM*
+
+# 4. Flash it -- adjust the port and the filename to match steps 2 and 3.
+esptool.py --chip esp32s3 -p /dev/ttyACM0 --before default_reset --after hard_reset \
+    write_flash --flash_mode dio --flash_size keep --flash_freq 80m \
+    0x0 micropython-xiao-esp32s3-v1.29.0-34-gf7cdef69c8.bin
+```
+
+Then tap **RESET** on the board and F5 in VS Code to start debugging.
+
+Raspberry Pi Pico, Pico 2, QT Py RP2040, and ESP32-S2 boards install normally
+through the extension on Linux -- only ESP32-S3 needs this manual step.
 
 ---
 
