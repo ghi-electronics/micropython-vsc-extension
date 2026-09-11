@@ -133,6 +133,25 @@ Data files are deployed only if you list them, since the filesystem is small:
 Windows, Linux and macOS are all supported, and everything needed ships inside the
 extension — nothing to compile, no toolchain, no Python.
 
+### Linux only
+
+Install the udev rule once, then replug the board.
+
+Open a terminal and run:
+
+```bash
+cd ~/.vscode/extensions/ghi-electronics.micropython-debugger-<version>
+sudo cp udev/99-micropython-debugger.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+Replace `<version>` with the version you have installed (for example, `0.1.0`).
+Run `ls ~/.vscode/extensions/` to find the exact folder name.
+
+Without it, the board cannot be opened: `/dev/ttyACM*` belongs to the `dialout` group,
+and ModemManager probes the debug channel for several seconds after every plug-in.
+Windows and macOS need nothing.
+
 ---
 
 ## About GHI Electronics
