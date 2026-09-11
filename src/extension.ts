@@ -84,7 +84,7 @@ class ConfigProvider implements vscode.DebugConfigurationProvider {
                 return undefined;
             }
             config.type = "micropython";
-            config.name = "Deploy and Debug (MicroPython, USB)";
+            config.name = "MicroPython Deploy and Debug (USB)";
             config.request = "launch";
             config.program = program;
             config.sync = true;
@@ -252,7 +252,7 @@ const SAMPLE_LAUNCH = {
         {
             type: "micropython",
             request: "launch",
-            name: "Deploy and Debug (MicroPython, USB)",
+            name: "MicroPython Deploy and Debug (USB)",
             program: "${workspaceFolder}/main.py",
             sync: true,
             stopOnEntry: false,

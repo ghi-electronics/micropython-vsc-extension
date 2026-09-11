@@ -771,6 +771,35 @@ export class MicroPythonDebugSession extends DebugSession {
     ): Promise<void> {
         // Serves Watch, hover, and the Debug Console prompt.
         const frame = args.frameId ?? 0;
+        const expr = args.expression.trim();
+
+        // Bare-identifier shortcut. The device's evaluator compiles the
+        // expression against the frame's module globals only, so a hover on a
+        // function argument or a non-argument local would return NameError.
+        // For a lone name we can answer without compiling: look it up in the
+        // frame's Locals (which the host already knows how to fetch and name),
+        // and fall through to the device only if it is not a local -- in which
+        // case it is a global and the device evaluator handles it correctly.
+        //
+        // The shortcut is limited to plain identifiers on purpose. Expressions
+        // like `a + b` where `a` or `b` is a local still hit the underlying
+        // limitation; fixing that needs the eval scope to carry locals, which
+        // is a wire-protocol change.
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(expr)) {
+            try {
+                const slots = await this.link.variables(frame, DevScope.Locals);
+                const named = this.nameLocals(frame, slots);
+                const hit = named.find((v) => v.name === expr);
+                if (hit) {
+                    response.body = { result: hit.value, variablesReference: hit.handle };
+                    this.sendResponse(response);
+                    return;
+                }
+            } catch {
+                // Fall through to the device evaluator on any lookup failure.
+            }
+        }
+
         try {
             const r = await this.link.evaluate(frame, args.expression);
             response.body = { result: r.value, variablesReference: 0 };
