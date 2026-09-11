@@ -38,24 +38,6 @@ import sys
 # esp32, where the artifact has to be merged first.  "publish" is the file name
 # on the website; {version} is substituted.
 BOARDS = [
-    # Announced but not yet shipping: the SITCore parts need GHI's own
-    # bootloader, which this toolchain cannot produce yet.  They are published
-    # with url "N/A" so the list shows what is coming; the extension recognises
-    # that and stops rather than pretending to install something.
-    {
-        "id": "SC20xxx",
-        "device_support": "SC20260N, SC20260D",
-        "kind": "ghi-loader",
-        "enterBootloader": "Hold LDR, tap RESET, then release LDR.",
-        "unavailable": True,
-    },
-    {
-        "id": "SC13xxx",
-        "device_support": "SC13048, FEZ Flea",
-        "kind": "ghi-loader",
-        "enterBootloader": "Hold LDR, tap RESET, then release LDR.",
-        "unavailable": True,
-    },
     {
         "id": "RPI_PICO",
         "device_support": "Raspberry Pi Pico",

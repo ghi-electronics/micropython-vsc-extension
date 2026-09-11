@@ -23,7 +23,7 @@ first, so the NeoPixel gets power.
 
 ## Debugging it
 
-`main.py` line 31 is `led.write()` -- the moment the new colour reaches the
+`main.py` line 31 is `led.write()` inside the `show()` function -- the moment the new colour reaches the
 LED. Set a breakpoint there, press F5, then **F10** to step over: the LED
 changes colour while the debugger is stopped. That is one of the more
 satisfying demonstrations that F5 is driving the real board rather than
