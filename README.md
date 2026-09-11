@@ -37,30 +37,34 @@ on the real line, with the real values in scope.
 
 ## Getting started
 
-1. Flash the MicroPython firmware for your board (see [Supported hardware](#supported-hardware) below).
-2. Open a folder containing `.py` files (compiled `.mpy` libraries work too).
-3. Press **F5**, and pick *MicroPython*.
+If you haven't done so, update your board firmware with MicroPython debug support. See **Supported hardware** below.
 
-That is the whole setup — no `launch.json`, no project file, no Python environment. The
-extension offers to save a launch configuration afterwards so F5 stops asking.
+New project:
 
-Starting from an empty folder? **MicroPython: New Project** writes a sample `main.py`, a
-`lib/` directory and a launch configuration.
+1. Make a new folder and open it in VS Code.
+2. From command pallete, select **MicroPython: New Project**.
+3. Press **F5**... DONE, enjoy!
+
+Existing project:
+1. Open the project folder in VS Code
+2. Hit **F5** and select **MicroPython**.
+3. The extension offers to save a launch configuration afterwards so F5 stops asking.
 
 ## Supported hardware
 
-| Chip | Boards |
+MicroPython debug support is compiled and tested on some boards for you. 
+
+Run **MicroPython: Update Device Firmware** in the Command Palette, pick your board, and follow the instructions.
+
+You can also download the firmware and flash it yourself. Click on the desired board in the table below to download the firmware.
+
+| Chip | Available Firmware |
 |---|---|
 | **RP2040** | [Raspberry Pi Pico][pico], [Adafruit QT Py RP2040][qtpy-rp2040] |
 | **RP2350** | [Raspberry Pi Pico 2][pico2] |
 | **ESP32-S2** | [Adafruit QT Py ESP32-S2 and generic ESP32-S2 modules][esp32-s2] |
 | **ESP32-S3** | [ESP32-S3 N16R8 Development Board][esp32-s3-octal], [Seeed XIAO ESP32-S3][xiao-s3], [Hosyond ESP32-S3 Touchscreen Module (3.5″)][esp32-s3-octal] |
-| **STM32L452** | [SC13xxx family (GHI Electronics)](https://www.ghielectronics.com/tinyclr/) |
-| **STM32H743** | [SC20xxx family (GHI Electronics)](https://www.ghielectronics.com/tinyclr/) |
 
-Click a board to download the firmware and flash it yourself. Or run
-**MicroPython: Update Device Firmware** in the Command Palette, pick your board,
-and follow the instructions.
 
 [pico]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico-v1.29.0-33-g25afef4534.uf2
 [pico2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico2-v1.29.0-33-g25afef4534.uf2
@@ -113,10 +117,14 @@ Data files are deployed only if you list them, since the filesystem is small:
   listening for what you type. Output still appears; Ctrl-C gets you a prompt.
 - **First deploy of a large project takes a few seconds.** After that only changed files
   are sent, so an edit-and-run cycle is a fraction of a second.
+- **Breakpoints in top-level module code may not fire.** If your `main.py` runs its
+  logic directly in a top-level `while True:` loop, breakpoints inside that loop can be
+  skipped. Move the loop body into a small function and call it from the loop — the
+  breakpoint fires reliably inside the function. Under investigation.
 
 ## Requirements
 
-- A device running the MicroPython firmware — see [Supported hardware](#supported-hardware)
+- A device running the MicroPython firmware with debugging support
 - VS Code 1.85 or newer
 
 Windows, Linux and macOS are all supported, and everything needed ships inside the
