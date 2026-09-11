@@ -6,6 +6,8 @@ Set a breakpoint in the gutter. Press F5. Your code deploys, the board restarts,
 execution stops on that line — with the call stack, your variables, and a working
 Watch window. No JTAG, no debug probe, no wiring.
 
+![MicroPython Debugger Servo](images/servo.gif)
+
 **F5, F10, F11, Shift+F11, restart, stop — the debugger you already know, driving a
 microcontroller.** Not a print-and-guess loop, and not a simulator: the real chip, halted
 on the real line, with the real values in scope.
