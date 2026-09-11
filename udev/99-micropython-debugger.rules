@@ -41,7 +41,9 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="239a", ATTRS{idProduct}=="80f8", MODE="0666"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="4002", MODE="0666", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
 
 # ESP32-S2 / S3 in the ROM download loader, which is what "Update Device
-# Firmware" talks to.  This is a different device from the running firmware
-# above -- PID 0x0002 is fixed in the chip's ROM -- so it needs its own line or
+# Firmware" talks to.  Different device from the running firmware above --
+# and different PID per chip: S2 uses 0x0002, S3 uses 0x1001 (its USB
+# Serial/JTAG bridge).  Both are fixed in ROM.  Missing either line means
 # flashing fails with a permission error on Linux while working on Windows.
 SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="0002", MODE="0666", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", MODE="0666", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
