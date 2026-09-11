@@ -44,19 +44,19 @@ If you haven't done so, update your board firmware with MicroPython debug suppor
 New project:
 
 1. Make a new folder and open it in VS Code.
-2. From command pallete, select **MicroPython: New Project**.
+2. From command pallete, select `MicroPython: New Project`.
 3. Press **F5**... DONE, enjoy!
 
 Existing project:
 1. Open the project folder in VS Code
-2. Hit **F5** and select **MicroPython**.
+2. Hit **F5** and select `MicroPython`.
 3. The extension offers to save a launch configuration afterwards so F5 stops asking.
 
 ## Supported hardware
 
 MicroPython debug support is compiled and tested on some boards for you. 
 
-Run **MicroPython: Update Device Firmware** in the Command Palette, pick your board, and follow the instructions.
+Run `MicroPython: Update Device Firmware` in the Command Palette, pick your board, and follow the instructions.
 
 You can also download the firmware and flash it yourself. Click on the desired board in the table below to download the firmware.
 
@@ -127,23 +127,10 @@ Data files are deployed only if you list them, since the filesystem is small:
 ## Requirements
 
 - A device running the MicroPython firmware with debugging support
-- VS Code 1.85 or newer
+- VS Code 1.137 or newer
 
 Windows, Linux and macOS are all supported, and everything needed ships inside the
 extension — nothing to compile, no toolchain, no Python.
-
-### Linux only
-
-Install the udev rule once, then replug the board:
-
-```
-sudo cp udev/99-micropython-debugger.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
-
-Without it the board cannot be opened: `/dev/ttyACM*` belongs to the `dialout` group, and
-ModemManager probes the debug channel for several seconds after every plug-in. Windows
-and macOS need nothing.
 
 ---
 
