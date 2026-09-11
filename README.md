@@ -43,9 +43,10 @@ If you haven't done so, update your board firmware with MicroPython debug suppor
 
 New project:
 
-1. Make a new folder and open it in VS Code.
-2. From command pallete, select `MicroPython: New Project`.
-3. Press **F5**... DONE, enjoy!
+1. Open VS Code.
+2. From the Command Palette (Ctrl+Shift+P), select `MicroPython: New Project`.
+3. Choose a location and enter a project name. A new folder with that name is created at the chosen location.
+4. Press **F5**... DONE, enjoy!
 
 Existing project:
 1. Open the project folder in VS Code
