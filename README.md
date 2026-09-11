@@ -69,12 +69,12 @@ You can also download the firmware and flash it yourself. Click on the desired b
 | **ESP32-S3** | [ESP32-S3 N16R8 Development Board][esp32-s3-octal], [Seeed XIAO ESP32-S3][xiao-s3], [Hosyond ESP32-S3 Touchscreen Module (3.5″)][esp32-s3-octal] |
 
 
-[pico]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico-v1.29.0-33-g25afef4534.uf2
-[pico2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico2-v1.29.0-33-g25afef4534.uf2
-[qtpy-rp2040]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-qtpy-rp2040-v1.29.0-33-g25afef4534.uf2
-[esp32-s2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s2-v1.29.0-33-g25afef4534.bin
-[xiao-s3]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-xiao-esp32s3-v1.29.0-33-g25afef4534.bin
-[esp32-s3-octal]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-psram-v1.29.0-33-g25afef4534.bin
+[pico]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico-v1.29.0-34-gf7cdef69c8.uf2
+[pico2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico2-v1.29.0-34-gf7cdef69c8.uf2
+[qtpy-rp2040]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-qtpy-rp2040-v1.29.0-34-gf7cdef69c8.uf2
+[esp32-s2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s2-v1.29.0-34-gf7cdef69c8.bin
+[xiao-s3]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-xiao-esp32s3-v1.29.0-34-gf7cdef69c8.bin
+[esp32-s3-octal]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-psram-v1.29.0-34-gf7cdef69c8.bin
 
 ## Commands
 
