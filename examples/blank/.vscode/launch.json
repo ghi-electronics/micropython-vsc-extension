@@ -4,7 +4,7 @@
         {
             "type": "micropython",
             "request": "launch",
-            "name": "Deploy and Debug (MicroPython, USB)",
+            "name": "MicroPython Deploy and Debug (USB)",
             "program": "${workspaceFolder}/main.py",
             "sync": true,
             "stopOnEntry": false
