@@ -8,6 +8,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 import { MicroPythonDebugSession } from "./debugSession";
 import { DeviceLink, findPorts } from "./deviceLink";
 import { Cond } from "./protocol";
@@ -21,6 +22,9 @@ const output = vscode.window.createOutputChannel("MicroPython Debugger");
 export function activate(context: vscode.ExtensionContext): void {
     output.appendLine("MicroPython Debugger extension activated");
     context.subscriptions.push(output);
+    // If this window just opened because "New Project" scaffolded a folder,
+    // finish the wizard: focus main.py and show the ready toast.
+    void openPendingProject(context);
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory(
             "micropython", new InlineAdapterFactory()),
@@ -35,7 +39,7 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand(
             "micropython-debugger.eraseDevice", () => { void eraseDevice(); }),
         vscode.commands.registerCommand(
-            "micropython-debugger.newProject", () => { void newProject(); }),
+            "micropython-debugger.newProject", () => { void newProject(context); }),
         vscode.commands.registerCommand(
             "micropython-debugger.updateFirmware",
             // Returns its result: the firmware-install offer needs to know
@@ -261,37 +265,122 @@ const SAMPLE_LAUNCH = {
 };
 
 /**
- * Scaffold an empty folder: an entry script, a lib/ for modules, and a launch
- * configuration. Only useful when starting from nothing -- an existing project
- * already runs with F5 and needs none of this.
+ * Scaffold a brand-new project: ask for the parent folder and a project name,
+ * create the folder, write main.py + lib/ + .vscode/launch.json, then open it.
+ *
+ * "Open the folder" is what closes the wizard: since VS Code either reloads
+ * the current window or opens a new one, code that runs after the openFolder
+ * call may never execute here. The follow-up (focus main.py, show the ready
+ * toast) is left as a breadcrumb in globalState and picked up by
+ * openPendingProject() during activate in the destination window.
  */
-async function newProject(): Promise<void> {
-    const folder = vscode.workspace.workspaceFolders?.[0];
-    if (!folder) {
-        void vscode.window.showErrorMessage("Open a folder first.");
+const PENDING_KEY = "pendingProjectOpen";
+
+async function newProject(context: vscode.ExtensionContext): Promise<void> {
+    // Default the parent to the folder above the current workspace, so a
+    // series of projects tend to land in one place. If nothing is open, the
+    // user's home directory is as good a default as any.
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const defaultParent = workspaceRoot ? path.dirname(workspaceRoot) : os.homedir();
+
+    const picked = await vscode.window.showOpenDialog({
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        openLabel: "Select parent folder",
+        defaultUri: vscode.Uri.file(defaultParent),
+        title: "Where should the new MicroPython project live?",
+    });
+    if (!picked || picked.length === 0) {
         return;
     }
-    const root = folder.uri.fsPath;
-    const mainPath = path.join(root, "main.py");
-    if (fs.existsSync(mainPath)) {
-        const go = await vscode.window.showWarningMessage(
-            "main.py already exists. Add the launch configuration and lib/ only?",
-            "Continue", "Cancel");
-        if (go !== "Continue") {
-            return;
-        }
-    } else {
-        fs.writeFileSync(mainPath, SAMPLE_MAIN, "utf8");
+    const parent = picked[0].fsPath;
+
+    const name = await vscode.window.showInputBox({
+        title: "New MicroPython project",
+        prompt: "Folder name for the new project",
+        value: "micropython-project",
+        // Restrict to characters that behave the same on Windows, macOS and
+        // Linux filesystems, so a project made on one machine opens cleanly on
+        // another. Spaces are allowed but trimmed.
+        validateInput: (v) => {
+            const trimmed = v.trim();
+            if (!trimmed) {
+                return "Enter a name.";
+            }
+            if (!/^[A-Za-z0-9 ._-]+$/.test(trimmed)) {
+                return "Use only letters, digits, space, dot, underscore or hyphen.";
+            }
+            return null;
+        },
+    });
+    if (!name) {
+        return;
     }
 
+    const root = path.join(parent, name.trim());
+
+    if (fs.existsSync(root) && fs.readdirSync(root).length > 0) {
+        const go = await vscode.window.showWarningMessage(
+            `${root} already exists and is not empty.`,
+            {
+                modal: true,
+                detail: "Files with the same names will be overwritten. "
+                    + "Cancel and pick a different name to keep the existing folder.",
+            },
+            "Overwrite");
+        if (go !== "Overwrite") {
+            return;
+        }
+    }
+
+    fs.mkdirSync(root, { recursive: true });
     // lib/ is on the device's sys.path, so anything dropped here imports by its
     // own name -- the shape third-party libraries expect.
     fs.mkdirSync(path.join(root, "lib"), { recursive: true });
+    fs.writeFileSync(path.join(root, "main.py"), SAMPLE_MAIN, "utf8");
     writeLaunchJson(root);
 
-    const doc = await vscode.workspace.openTextDocument(mainPath);
-    await vscode.window.showTextDocument(doc);
-    void vscode.window.showInformationMessage("Project ready. Press F5 to deploy and debug.");
+    // Leave a breadcrumb so the extension in the destination window knows to
+    // focus main.py and greet the user, rather than opening on a blank editor.
+    await context.globalState.update(PENDING_KEY, root);
+
+    // Open in a new window if the user already has one, so their current work
+    // is not swept aside; reuse the empty window if they had nothing open.
+    const uri = vscode.Uri.file(root);
+    const forceNewWindow = !!vscode.workspace.workspaceFolders?.length;
+    await vscode.commands.executeCommand("vscode.openFolder", uri, { forceNewWindow });
+}
+
+/**
+ * When a "New Project" run set us up to open a fresh folder, finish the
+ * wizard: focus main.py and show the ready toast. Runs once per creation --
+ * the breadcrumb is cleared as soon as we act, and skipped if the destination
+ * window is not the folder we were about to open (the user could have opened
+ * something else in the meantime).
+ */
+async function openPendingProject(context: vscode.ExtensionContext): Promise<void> {
+    const pending = context.globalState.get<string>(PENDING_KEY);
+    if (!pending) {
+        return;
+    }
+    const current = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!current || path.resolve(current) !== path.resolve(pending)) {
+        return;                            // will be picked up when the right window opens
+    }
+    await context.globalState.update(PENDING_KEY, undefined);
+
+    const mainPath = path.join(pending, "main.py");
+    if (fs.existsSync(mainPath)) {
+        try {
+            const doc = await vscode.workspace.openTextDocument(mainPath);
+            await vscode.window.showTextDocument(doc);
+        } catch {
+            // Not fatal -- the greeting still lands.
+        }
+    }
+    void vscode.window.showInformationMessage(
+        "Project ready. Press F5 to deploy and debug.");
 }
 
 /** Write .vscode/launch.json, leaving an existing one alone. */
