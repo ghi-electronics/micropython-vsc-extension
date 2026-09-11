@@ -7,17 +7,14 @@ examples/**
 tsconfig.json
 .gitignore
 
-# Internal material -- a .vsix is a zip, so anything listed here would be
-# readable by every customer who installs the extension.
+# Internal material -- kept OUT of the .vsix. A .vsix is a plain zip, so
+# anything left in would be readable by every customer who installs the
+# extension. These files are for the team only.
 micropython_debugger.md
 tools/**
 build-extension.bat
 install_vsix.bat
 *.vsix
-
-# The 2375x1543 master. images/screenshot.jpg is the resized copy the README
-# points at; this original would only ever bloat the .vsix.
-demo.jpg
 
 # Firmware is fetched from the raw GitHub URL at run time (see
 # `micropython-debugger.firmwareManifestUrl` in package.json), so the local
