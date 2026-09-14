@@ -20,7 +20,7 @@
 
 import * as vscode from "vscode";
 import * as fs from "fs/promises";
-import { allBoards, GENERIC_BOOTLOADER_HINT, type BootBoard } from "./boards";
+import { manualFlashChoices, GENERIC_BOOTLOADER_HINT, type BootBoard } from "./boards";
 import { detectBootloaders, waitForBootloader, type DetectedBoot } from "./detect";
 import { writeUf2 } from "./drives";
 import { EspNotRespondingError, flashEsp, probeEspChip } from "./espFlash";
@@ -558,11 +558,14 @@ async function flashFromFileInner(
     context: vscode.ExtensionContext,
     output: vscode.OutputChannel,
 ): Promise<void> {
-    // Same shape as the indexed path: the board is chosen first, always.  There
-    // is no index here, so the list is what this build knows how to reach.
+    // Same shape as the indexed path: the board is chosen first, always. There
+    // is no index here, so the list is what this build knows how to reach --
+    // grouped by chip family, because the user is picking the firmware file
+    // themselves and the extension only needs the flash mechanism, expected
+    // chip and bootloader gesture. Per-SKU wording lives in the online index.
     const board = await chooseBoard(context, {
         schemaVersion: 1,
-        families: allBoards().map((b) => ({
+        families: manualFlashChoices().map((b) => ({
             ...b, device_support: b.deviceSupport, version: "from file",
             // Local file: no download, so a placeholder url that still reads as
             // available. isAvailable() rejects "" and "N/A".

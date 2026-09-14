@@ -23,6 +23,7 @@
 
 import * as vscode from "vscode";
 import { findPorts } from "../deviceLink";
+import { detectBootloaders } from "./detect";
 import type { UpdateResult } from "./updateFirmware";
 
 /** Wait for a board with a debug channel to appear, after an install. */
@@ -70,13 +71,34 @@ async function waitForBoard(): Promise<string | undefined> {
  * Returns undefined when the user declines or the board does not come back, in
  * which case the caller reports the original problem rather than inventing a
  * new one.
+ *
+ * Before offering the install, we check whether a board is sitting in its
+ * bootloader (UF2 drive mounted, or a serial ROM loader answering) -- because
+ * "install debugger firmware" is misleading when the firmware IS installed and
+ * the board just needs a tap on RESET to run it. The commonest cause is
+ * finishing a firmware update and pressing F5 without resetting first.
  */
 export async function offerFirmwareInstall(): Promise<string | undefined> {
+    const inBootloader = await detectBootloaders();
+    if (inBootloader.length > 0) {
+        await vscode.window.showWarningMessage(
+            "The board is in bootloader mode",
+            {
+                modal: true,
+                detail: "Tap RESET on the board to run the firmware, then press F5 again. "
+                    + "If you want to reinstall the firmware instead, use "
+                    + "\"MicroPython: Update Device Firmware\" from the Command Palette.",
+            },
+            "OK");
+        return undefined;
+    }
+
     const yes = await vscode.window.showWarningMessage(
         "Do you want to install the firmware that supports debugging?",
         {
             modal: true,
-            detail: "This replaces the firmware on the board and erases files stored on it.",
+            detail: "No MicroPython debugger firmware was found on the connected board. "
+                + "Installing replaces the firmware on the board and erases files stored on it.",
         },
         "Install");
     if (yes !== "Install") {

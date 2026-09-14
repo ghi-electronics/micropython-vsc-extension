@@ -137,16 +137,53 @@ export const GENERIC_BOOTLOADER_HINT =
     "Put the board into its bootloader: on most boards hold BOOT and tap RESET, "
     + "and on a Raspberry Pi Pico hold BOOTSEL while plugging the USB cable in.";
 
-/** Every board this extension can flash, for manual selection and messages. */
-export function allBoards(): BootBoard[] {
-    const out: BootBoard[] = [];
-    for (const fam of UF2_FAMILIES) {
-        out.push(...fam.boards);
-    }
-    for (const s of SERIAL_BOOTLOADERS) {
-        out.push(s.board);
-    }
-    return out;
+/**
+ * Choices shown by "Flash Firmware from File".
+ *
+ * The user has already selected the firmware file, so this list only has to
+ * capture what the extension itself needs to know: what mechanism to use to
+ * write it (UF2 drive vs Espressif ROM loader), what chip to expect when it
+ * answers, and how to get the board into its bootloader. Everything below
+ * that -- which specific SKU it is, exact filename, per-board bootloader
+ * wording -- is the file picker's problem, not this list's.
+ *
+ * So the list is by chip family, not by SKU. Four entries cover every board
+ * currently in the published manifest and every future variant that shares
+ * one of these silicon parts.
+ */
+export function manualFlashChoices(): BootBoard[] {
+    return [
+        {
+            id: "RP2040",
+            deviceSupport: "Raspberry Pi Pico, Adafruit QT Py RP2040",
+            kind: "uf2-drive",
+            // Two boards, two gestures (Pico has no RESET button), so use the
+            // generic wording that covers both.
+            enterBootloader: GENERIC_BOOTLOADER_HINT,
+        },
+        {
+            id: "RP2350",
+            deviceSupport: "Raspberry Pi Pico 2",
+            kind: "uf2-drive",
+            enterBootloader:
+                "Unplug the board, then plug the USB cable back in while holding BOOTSEL.",
+        },
+        {
+            id: "ESP32-S2",
+            deviceSupport: "Adafruit QT Py ESP32-S2, generic ESP32-S2 modules",
+            kind: "esp-rom",
+            chip: "ESP32-S2",
+            enterBootloader: "Hold BOOT, tap RESET, then release BOOT.",
+        },
+        {
+            id: "ESP32-S3",
+            deviceSupport: "Seeed XIAO ESP32-S3, generic ESP32-S3 with octal PSRAM (N8R8, N16R8)",
+            kind: "esp-rom",
+            chip: "ESP32-S3",
+            resetBefore: "usb_reset",
+            enterBootloader: "Hold BOOT, tap RESET, then release BOOT.",
+        },
+    ];
 }
 
 /**
