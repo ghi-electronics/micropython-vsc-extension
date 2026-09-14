@@ -9,10 +9,10 @@
       "bootloader": {
         "boardId": "RPI-RP2"
       },
-      "version": "1.29.0-34-gf7cdef69c8",
-      "date": "2026-09-11",
-      "url": "micropython-rpi-pico-v1.29.0-34-gf7cdef69c8.uf2",
-      "md5": "FD7CECAB99A485DC6D9DC0D01EBFC005",
+      "version": "1.29.0-35-g29b4eb3685",
+      "date": "2026-09-14",
+      "url": "micropython-rpi-pico-v1.29.0-35-g29b4eb3685.uf2",
+      "md5": "C67DBBBC9A8878819CB5DBE9C157C99E",
       "size": 732160,
       "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
     },
@@ -23,10 +23,10 @@
       "bootloader": {
         "boardId": "RP2350"
       },
-      "version": "1.29.0-34-gf7cdef69c8",
-      "date": "2026-09-11",
-      "url": "micropython-rpi-pico2-v1.29.0-34-gf7cdef69c8.uf2",
-      "md5": "17B32D78B5D880A49CD34CDD0CC55106",
+      "version": "1.29.0-35-g29b4eb3685",
+      "date": "2026-09-14",
+      "url": "micropython-rpi-pico2-v1.29.0-35-g29b4eb3685.uf2",
+      "md5": "0953D10696A63157582A7BEB847917A7",
       "size": 710656,
       "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
     },
@@ -37,10 +37,10 @@
       "bootloader": {
         "boardId": "RPI-RP2"
       },
-      "version": "1.29.0-34-gf7cdef69c8",
-      "date": "2026-09-11",
-      "url": "micropython-qtpy-rp2040-v1.29.0-34-gf7cdef69c8.uf2",
-      "md5": "7DE8DF37417255AD55C8A59F3A703CF5",
+      "version": "1.29.0-35-g29b4eb3685",
+      "date": "2026-09-14",
+      "url": "micropython-qtpy-rp2040-v1.29.0-35-g29b4eb3685.uf2",
+      "md5": "E514337FA60AC7094F67C4324C76969F",
       "size": 727552,
       "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
     },
@@ -54,11 +54,11 @@
           "pid": "0x0002"
         }
       },
-      "version": "1.29.0-34-gf7cdef69c8",
-      "date": "2026-09-11",
-      "url": "micropython-esp32-s2-v1.29.0-34-gf7cdef69c8.bin",
-      "md5": "7398B47F9650F4DF5BBAFD6BDB1BBB87",
-      "size": 1575056,
+      "version": "1.29.0-35-g29b4eb3685",
+      "date": "2026-09-14",
+      "url": "micropython-esp32-s2-v1.29.0-35-g29b4eb3685.bin",
+      "md5": "5D226DF2D893D11907FA600D942656E3",
+      "size": 1575040,
       "address": 0,
       "chip": "ESP32-S2",
       "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
@@ -73,11 +73,11 @@
           "pid": "0x1001"
         }
       },
-      "version": "1.29.0-34-gf7cdef69c8",
-      "date": "2026-09-11",
-      "url": "micropython-xiao-esp32s3-v1.29.0-34-gf7cdef69c8.bin",
-      "md5": "953EFE3A6B54EC09579E837229B80885",
-      "size": 1819952,
+      "version": "1.29.0-35-g29b4eb3685",
+      "date": "2026-09-14",
+      "url": "micropython-xiao-esp32s3-v1.29.0-35-g29b4eb3685.bin",
+      "md5": "74FFB51C313077F5B37C58CDE1FA0D1C",
+      "size": 1819936,
       "address": 0,
       "chip": "ESP32-S3",
       "resetBefore": "usb_reset",
@@ -93,11 +93,11 @@
           "pid": "0x1001"
         }
       },
-      "version": "1.29.0-34-gf7cdef69c8",
-      "date": "2026-09-11",
-      "url": "micropython-esp32-s3-octal-psram-v1.29.0-34-gf7cdef69c8.bin",
-      "md5": "C5E48A43CEB19ACCE3C823F9A3DBE3DD",
-      "size": 1822768,
+      "version": "1.29.0-35-g29b4eb3685",
+      "date": "2026-09-14",
+      "url": "micropython-esp32-s3-octal-psram-v1.29.0-35-g29b4eb3685.bin",
+      "md5": "26F71C75E496C0F13007BB15F18A3810",
+      "size": 1822752,
       "address": 0,
       "chip": "ESP32-S3",
       "resetBefore": "usb_reset",
