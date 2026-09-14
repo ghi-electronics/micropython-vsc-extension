@@ -1,0 +1,5 @@
+{
+    "device_name": "test-board",
+    "sample_rate_hz": 100,
+    "channels": ["a", "b", "c"]
+}
