@@ -22,6 +22,7 @@ import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import { manualFlashChoices, GENERIC_BOOTLOADER_HINT, type BootBoard } from "./boards";
 import { detectBootloaders, waitForBootloader, type DetectedBoot } from "./detect";
+import { findPorts } from "../deviceLink";
 import { writeUf2 } from "./drives";
 import { EspNotRespondingError, flashEsp, probeEspChip } from "./espFlash";
 import { flashGhiLoader } from "./ghiLoaderFlash";
@@ -325,16 +326,60 @@ async function flash(
         });
 }
 
+/**
+ * Wait for the just-flashed board to come back with its running-firmware
+ * USB identity.  Poll findPorts() at a slow interval so the check is cheap;
+ * return true as soon as a debug channel appears, false on timeout.
+ */
+async function waitForRunningFirmware(timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        try {
+            const ports = await findPorts();
+            if (ports.debug) {
+                return true;
+            }
+        } catch {
+            // Ignore transient enumeration errors -- the OS often reshuffles
+            // USB between the loader detaching and the app attaching.
+        }
+        if (Date.now() >= deadline) {
+            return false;
+        }
+        await new Promise((r) => setTimeout(r, 500));
+    }
+}
+
 /** What to tell the user once the image is on the board. */
-function reportDone(found: DetectedBoot, entry: FirmwareFamily): void {
-    // A native-USB ESP32 has nothing wired to DTR/RTS, so it cannot be restarted
-    // from here.  Saying so beats leaving the board looking dead.
-    const detail = found.kind === "uf2-drive"
-        ? "The board has restarted. Press F5 to start debugging."
-        : "Tap RESET on the board, then press F5 to start debugging.";
+async function reportDone(found: DetectedBoot, entry: FirmwareFamily): Promise<void> {
+    // esp-rom: native-USB ESP32 has nothing wired to DTR/RTS, so it cannot be
+    // restarted from here -- the user has to tap RESET.
+    // uf2-drive / ghi-loader: the board restarts itself as part of the flash
+    // (uf2 unmounts + boots, ghi bootloader R command jumps to firmware).
+    if (found.kind === "esp-rom") {
+        void vscode.window.showInformationMessage(
+            `Your ${entry.id} is ready to debug`,
+            {
+                modal: true,
+                detail: "Tap RESET on the board, then press F5 to start debugging.",
+            }, "OK");
+        return;
+    }
+
+    // Auto-restart path: give the board up to 15 s to come back with its
+    // running-firmware USB identity, so the user sees a "ready" prompt only
+    // once the debug channel actually exists.  If it does not come back in
+    // time, fall back to the "restarted -- if you cannot connect, replug" hint.
+    const ready = await waitForRunningFirmware(15_000);
     void vscode.window.showInformationMessage(
         `Your ${entry.id} is ready to debug`,
-        { modal: true, detail }, "OK");
+        {
+            modal: true,
+            detail: ready
+                ? "The board has restarted. Press F5 to start debugging."
+                : "The board should have restarted. Press F5 -- if the extension "
+                    + "reports no device, unplug and replug the USB cable.",
+        }, "OK");
 }
 
 /**
@@ -540,7 +585,7 @@ async function updateFirmwareInner(
         fail("Flashing failed", describe(err));
         return "failed";
     }
-    reportDone(found, entry);
+    await reportDone(found, entry);
     return "flashed";
 }
 
@@ -637,5 +682,5 @@ async function flashFromFileInner(
         fail("Flashing failed", describe(err));
         return;
     }
-    reportDone(found, entry);
+    await reportDone(found, entry);
 }

@@ -23,8 +23,14 @@
 #      fails or behaves strangely, then recovers, which is a miserable thing to
 #      diagnose. ID_MM_DEVICE_IGNORE tells it to leave this device alone.
 
-# GHI Electronics SITCore SC13xxx, dual CDC (VCP+VCP)
+# GHI Electronics SITCore SC13xxx, dual CDC (VCP+VCP) -- the running firmware.
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1b9f", ATTRS{idProduct}=="f105", MODE="0666", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+
+# SITCore BL2 bootloader (all SITCore variants share this identity), which is
+# what "Update Device Firmware" talks to.  Different device from the running
+# firmware above, so it needs its own line or flashing fails with a permission
+# error on Linux while working on Windows.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1b9f", ATTRS{idProduct}=="0104", MODE="0666", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
 
 # Raspberry Pi Pico / Pico 2.  Same VID/PID as stock MicroPython, which is
 # deliberate (see 12.2): stock presents one CDC and simply has no debug

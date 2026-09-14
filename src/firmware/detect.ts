@@ -88,7 +88,11 @@ export async function detectBootloaders(): Promise<DetectedBoot[]> {
             const hit = SERIAL_BOOTLOADERS.find((s) => s.vid === vid && s.pid === pid);
             if (hit) {
                 out.push({
-                    kind: "esp-rom",
+                    // Whatever kind the matched board uses -- SERIAL_BOOTLOADERS
+                    // covers both Espressif ROM loaders (esp-rom) and the GHI
+                    // SITCore BL2 loader (ghi-loader), and the caller routes on
+                    // this field.
+                    kind: hit.board.kind,
                     label: hit.board.deviceSupport,
                     candidates: [hit.board],
                     port: p.path,

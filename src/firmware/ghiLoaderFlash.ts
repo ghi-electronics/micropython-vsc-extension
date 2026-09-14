@@ -7,15 +7,21 @@
  * matters, since the .ghi file's encrypted header carries device-specific
  * regions and the bootloader validates and decrypts it before flashing.
  *
- * Command line-terminated exchange (from tinyclr/bootloader.md):
+ * Command exchange (from tinyclr/bootloader.md, verified against BL2 source):
  *
- *     Host: V\r\n         --> bootloader banner ending in "OK.\r\n"
- *     Host: E\r\n         --> Y/N prompt
- *     Host: Y\r\n         --> erases user flash, ends in "OK.\r\n"
- *     Host: X\r\n         --> Y/N prompt
- *     Host: Y\r\n         --> repeating "C" characters when ready for CRC XMODEM
+ *     Host: V\r           --> bootloader banner ending in "OK.\r\n"
+ *     Host: X\r           --> "Are you sure (Y/N)?\r\n"
+ *     Host: Y\r           --> "Waiting...\r\n" then a stream of 'C' characters
  *     Host: [1K XMODEM]   --> STX-framed 1024-byte blocks, CRC-16-XMODEM
- *     Host: R\r\n         --> jump to firmware
+ *                             The X command's first-packet processing erases
+ *                             the target flash region from the encrypted
+ *                             header, so no separate E command is needed.
+ *     Host: R\r           --> jump to firmware
+ *
+ * **Line terminator is a single \r, not \r\n.**  The bootloader's IO_ReadLine
+ * ends on the first \r OR \n it sees; sending both makes the trailing \n look
+ * like an empty command line and cancels whatever confirmation the previous
+ * command was waiting for.
  *
  * The `B` command (raise UART baud to 921,600) is deliberately not sent: this
  * is a USB-CDC device, so its "baud" is fiction and B costs a round trip for
@@ -55,9 +61,13 @@ const XMODEM_EOT_RETRIES = 3;
 const OPEN_TIMEOUT_MS = 3_000;
 const BANNER_TIMEOUT_MS = 3_000;
 const PROMPT_TIMEOUT_MS = 2_000;
-const ERASE_TIMEOUT_MS = 60_000;     // full-flash erase is the slow one
 const CRC_WAIT_TIMEOUT_MS = 15_000;  // bootloader sends "C" once it is ready
 const BLOCK_ACK_TIMEOUT_MS = 5_000;
+// First-block ACK is deliberately much longer: the bootloader receives the
+// encrypted header in packet 1, then erases the target flash region before
+// acking.  Full 384 KB region erase on STM32L4 takes ~15 s worst case, so
+// 60 s is comfortable headroom.  Subsequent blocks ACK quickly.
+const FIRST_BLOCK_ACK_TIMEOUT_MS = 60_000;
 
 /** CRC-16/XMODEM (poly 0x1021, init 0, no reflection, no final XOR). */
 function crc16xmodem(data: Uint8Array): number {
@@ -215,7 +225,7 @@ async function closePort(port: any): Promise<void> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function sendCommand(port: any, queue: ByteQueue, cmd: string,
     expect: RegExp, timeoutMs: number): Promise<string> {
-    await writePort(port, Buffer.from(cmd + "\r\n", "latin1"));
+    await writePort(port, Buffer.from(cmd + "\r", "latin1"));
     return queue.readUntil(expect, timeoutMs);
 }
 
@@ -258,11 +268,13 @@ function buildBlock(seq: number, payload: Buffer): Buffer {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function sendBlock(port: any, queue: ByteQueue, seq: number, payload: Buffer): Promise<void> {
+async function sendBlock(port: any, queue: ByteQueue, seq: number, payload: Buffer,
+    isFirstBlock: boolean): Promise<void> {
     const packet = buildBlock(seq, payload);
+    const ackTimeout = isFirstBlock ? FIRST_BLOCK_ACK_TIMEOUT_MS : BLOCK_ACK_TIMEOUT_MS;
     for (let attempt = 0; attempt < XMODEM_BLOCK_RETRIES; attempt++) {
         await writePort(port, packet);
-        const r = await queue.readByte(BLOCK_ACK_TIMEOUT_MS);
+        const r = await queue.readByte(ackTimeout);
         if (r === ACK) {
             return;
         }
@@ -326,51 +338,64 @@ export async function flashGhiLoader(opts: GhiLoaderFlashOptions): Promise<void>
     port.on("close", () => queue.fail(new Error("The bootloader port disconnected")));
 
     try {
-        // 1. Sync + version. Bootloader emits "OK.\r\n" at end of every reply.
+        // 1. Sync + version.  Bootloader responds with a banner terminated
+        //    by "OK.\r\n" -- proves we are talking to the right device before
+        //    doing anything destructive.
         opts.onStatus?.("connecting to bootloader...");
         opts.log("> V");
         const banner = await sendCommand(port, queue, "V", /OK\.\r?\n/, BANNER_TIMEOUT_MS);
         opts.log(banner.trimEnd());
 
-        // 2. Erase user flash. Wait for prompt, confirm with Y, wait for OK.
-        opts.onStatus?.("Please wait: erasing flash (can take up to a minute)...");
-        opts.log("> E");
-        await sendCommand(port, queue, "E", /\?/, PROMPT_TIMEOUT_MS);
-        opts.log("> Y");
-        const eraseResp = await sendCommand(port, queue, "Y", /OK\.\r?\n/, ERASE_TIMEOUT_MS);
-        opts.log(eraseResp.trimEnd());
-
-        // 3. Enter GHI upload mode. X asks for confirmation; Y begins the
+        // 2. Enter GHI upload mode.  X asks for confirmation; Y begins the
         //    CRC-XMODEM handshake and the bootloader starts emitting 'C'.
-        opts.onStatus?.("Please wait: preparing image transfer...");
+        //    Between packet 1 and its ACK the bootloader erases the target
+        //    region, based on the address/size in the encrypted header -- no
+        //    separate E command is needed (the E command's Y/N confirmation
+        //    is a separate exchange that only wastes flash cycles for a full
+        //    reflash like this).
+        opts.onStatus?.("preparing image transfer...");
         opts.log("> X");
         await sendCommand(port, queue, "X", /\?/, PROMPT_TIMEOUT_MS);
         opts.log("> Y");
-        await writePort(port, Buffer.from("Y\r\n", "latin1"));
+        await writePort(port, Buffer.from("Y\r", "latin1"));
         await waitForCRC(queue, CRC_WAIT_TIMEOUT_MS);
 
-        // 4. Send the file in 1K blocks. XMODEM block numbers start at 1 and
-        //    wrap through 0. Progress reported per block.
-        opts.onStatus?.("writing image...");
+        // 3. Send the file in 1K blocks.  XMODEM block numbers start at 1
+        //    and wrap through 0.  Progress reported per block.  The first
+        //    block's ACK is slow because the bootloader erases the target
+        //    flash region before acking; sendBlock accepts a per-call
+        //    timeout so we can allow for that without slowing everything.
+        opts.onStatus?.("Please wait: erasing flash and writing image...");
         const total = opts.data.length;
         let written = 0;
         let seq = 1;
+        let isFirstBlock = true;
         while (written < total) {
             const slice = opts.data.subarray(written, Math.min(written + XMODEM_PACKET_SIZE, total));
-            await sendBlock(port, queue, seq, slice);
+            await sendBlock(port, queue, seq, slice, isFirstBlock);
             written += slice.length;
             seq = (seq + 1) & 0xFF;
+            isFirstBlock = false;
             opts.onProgress(written, total);
+            if (written === XMODEM_PACKET_SIZE) {
+                // First block landed -- erase completed, per-block writes will
+                // be quick from here.
+                opts.onStatus?.("writing image...");
+            }
         }
 
-        // 5. End of transmission.
+        // 4. End of transmission.
         opts.onStatus?.("finishing...");
         await sendEot(port, queue);
 
-        // 6. Run.  The bootloader jumps to the firmware and stops responding
-        //    to the loader protocol from this point on; we do not read back.
+        // 5. Run.  R also requires a Y/N confirmation like X does -- send R,
+        //    wait for the confirmation prompt, then Y.  After Y the bootloader
+        //    jumps into the just-flashed firmware and stops responding to the
+        //    loader protocol from this point on, so we do not read back.
         opts.log("> R");
-        await writePort(port, Buffer.from("R\r\n", "latin1"));
+        await sendCommand(port, queue, "R", /\?/, PROMPT_TIMEOUT_MS);
+        opts.log("> Y");
+        await writePort(port, Buffer.from("Y\r", "latin1"));
     } finally {
         await closePort(port);
     }
