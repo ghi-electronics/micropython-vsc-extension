@@ -125,19 +125,27 @@ Data files are deployed only if you list them, since the filesystem is small:
   skipped. Move the loop body into a small function and call it from the loop — the
   breakpoint fires reliably inside the function. Under investigation.
 - **ESP32-S3 firmware update fails on Linux.** The extension's flash path aborts
-  the handshake during the USB-JTAG reset sequence on Linux. Install manually from
-  the terminal — see the Linux section under Requirements. Other boards and other
-  platforms are unaffected.
+  the handshake during the USB-JTAG reset sequence on Linux only. Install manually
+  from the terminal — see the Linux section under Requirements. Windows and macOS
+  flash ESP32-S3 normally through the extension.
 
 ## Requirements
 
 - A device running the MicroPython firmware with debugging support
 - VS Code 1.137 or newer
 
-Windows, Linux are all supported, and everything needed ships inside the
-extension — nothing to compile, no toolchain, no Python.
+Windows, macOS, Linux and ChromeOS are supported. Everything needed ships inside
+the extension — nothing to compile, no toolchain, no Python.
 
-### Linux only
+### Windows
+
+Fully supported.
+
+### macOS
+
+Fully supported.
+
+### Linux
 
 Install the udev rule once, then replug the board.
 
@@ -154,9 +162,8 @@ Run `ls ~/.vscode/extensions/` to find the exact folder name.
 
 Without it, the board cannot be opened: `/dev/ttyACM*` belongs to the `dialout` group,
 and ModemManager probes the debug channel for several seconds after every plug-in.
-Windows and macOS need nothing.
 
-#### Installing firmware on ESP32-S3 (Linux only)
+#### Installing firmware on ESP32-S3
 
 **MicroPython: Update Device Firmware** does not currently work for ESP32-S3
 boards on Linux (see Known limits). Install from the terminal instead:
@@ -185,6 +192,25 @@ Then tap **RESET** on the board and F5 in VS Code to start debugging.
 
 Raspberry Pi Pico, Pico 2, QT Py RP2040, and ESP32-S2 boards install normally
 through the extension on Linux -- only ESP32-S3 needs this manual step.
+
+### ChromeOS
+
+Automatic firmware updates through the extension are not supported on
+ChromeOS. Install firmware manually using the terminal commands shown in
+the Linux section above.
+
+Once the firmware is running, enable USB pass-through for your board in
+ChromeOS **Settings → About ChromeOS → Developers → Linux → Manage USB
+devices**, then pin the debug port in `.vscode/launch.json`:
+
+```jsonc
+"device": "/dev/ttyACM1"
+```
+
+Auto-detect does not work in Crostini because pass-through USB devices carry
+no VID/PID metadata. The exact port name may differ; find yours with
+`ls /dev/ttyACM*` — the debugger firmware exposes two ports, and the
+higher-numbered one is the debug channel.
 
 ---
 
