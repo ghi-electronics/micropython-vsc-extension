@@ -67,6 +67,7 @@ You can also download the firmware and flash it yourself. Click on the desired b
 | **RP2350** | [Raspberry Pi Pico 2][pico2] |
 | **ESP32-S2** | [Adafruit QT Py ESP32-S2 and generic ESP32-S2 modules][esp32-s2] |
 | **ESP32-S3** | [ESP32-S3 N16R8 Development Board][esp32-s3-octal], [Seeed XIAO ESP32-S3][xiao-s3], [Hosyond ESP32-S3 Touchscreen Module (3.5″)][esp32-s3-octal] |
+| **STM32L4** | [GHI SITCore SC13048, FEZ Flea][sc13048] |
 
 
 [pico]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico-v1.29.0-35-g29b4eb3685.uf2
@@ -75,6 +76,7 @@ You can also download the firmware and flash it yourself. Click on the desired b
 [esp32-s2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s2-v1.29.0-35-g29b4eb3685.bin
 [xiao-s3]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-xiao-esp32s3-v1.29.0-35-g29b4eb3685.bin
 [esp32-s3-octal]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-psram-v1.29.0-35-g29b4eb3685.bin
+[sc13048]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-sc13048-v1.29.0-35-g29b4eb3685.ghi
 
 ## Commands
 

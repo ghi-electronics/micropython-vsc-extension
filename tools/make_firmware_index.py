@@ -116,6 +116,19 @@ BOARDS = [
         "esp_build": "ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT",
         "publish": "micropython-esp32-s3-octal-psram-v{version}.bin",
     },
+    {
+        # GHI SITCore SC13048.  The .ghi is produced from firmware.bin by
+        # running encrypt_bin.bat (in TinyCLR-Devices) after the stm32 build.
+        # imagegen.exe signs a 1 KB header with the SITCore FirmwareUploadHeaderKey
+        # and lets the bootloader validate + place the payload.
+        "id": "SC13048",
+        "device_support": "GHI SITCore SC13xxx (SC13048, FEZ Flea)",
+        "kind": "ghi-loader",
+        "bootloader": {"usb": {"vid": "0x1B9F", "pid": "0x0104"}},
+        "enterBootloader": "Hold LDR, tap RESET, then release LDR.",
+        "artifact": "ports/stm32/build-SC13048Q/firmware.ghi",
+        "publish": "micropython-sc13048-v{version}.ghi",
+    },
 ]
 
 

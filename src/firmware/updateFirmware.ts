@@ -24,6 +24,7 @@ import { manualFlashChoices, GENERIC_BOOTLOADER_HINT, type BootBoard } from "./b
 import { detectBootloaders, waitForBootloader, type DetectedBoot } from "./detect";
 import { writeUf2 } from "./drives";
 import { EspNotRespondingError, flashEsp, probeEspChip } from "./espFlash";
+import { flashGhiLoader } from "./ghiLoaderFlash";
 import {
     downloadFirmware, isAvailable, loadManifest, md5, parseHexId,
     type FirmwareFamily, type Manifest,
@@ -277,6 +278,20 @@ async function flash(
                 const report = percentReporter(progress, "Wrote");
                 await writeUf2(found.drive!.mount, data,
                     (written, total) => report(written, total));
+                return;
+            }
+
+            if (found.kind === "ghi-loader") {
+                const report = percentReporter(progress, "Wrote");
+                await flashGhiLoader({
+                    port: found.port!,
+                    vendorId: found.vendorId ?? 0,
+                    productId: found.productId ?? 0,
+                    data,
+                    onStatus: (line) => progress.report({ message: line }),
+                    onProgress: (written, total) => report(written, total),
+                    log: (line) => output.appendLine(line),
+                });
                 return;
             }
 

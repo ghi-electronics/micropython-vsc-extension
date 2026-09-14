@@ -102,6 +102,23 @@
       "chip": "ESP32-S3",
       "resetBefore": "usb_reset",
       "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
+    },
+    {
+      "id": "SC13048",
+      "device_support": "GHI SITCore SC13xxx (SC13048, FEZ Flea)",
+      "kind": "ghi-loader",
+      "bootloader": {
+        "usb": {
+          "vid": "0x1B9F",
+          "pid": "0x0104"
+        }
+      },
+      "version": "1.29.0-35-g29b4eb3685",
+      "date": "2026-09-14",
+      "url": "micropython-sc13048-v1.29.0-35-g29b4eb3685.ghi",
+      "md5": "EE786F34BA648A5D51965776A4B8E907",
+      "size": 361472,
+      "enterBootloader": "Hold LDR, tap RESET, then release LDR."
     }
   ]
 }
