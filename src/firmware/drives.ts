@@ -1,3 +1,6 @@
+// Copyright (c) GHI Electronics.
+// SPDX-License-Identifier: MIT
+
 /**
  * Finding, and writing to, a UF2 bootloader drive.
  *

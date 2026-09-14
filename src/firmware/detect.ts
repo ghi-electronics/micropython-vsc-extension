@@ -1,3 +1,6 @@
+// Copyright (c) GHI Electronics.
+// SPDX-License-Identifier: MIT
+
 /**
  * Finding a board that is sitting in its bootloader.
  *

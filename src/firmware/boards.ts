@@ -1,3 +1,6 @@
+// Copyright (c) GHI Electronics.
+// SPDX-License-Identifier: MIT
+
 /**
  * Board identity while a board is in its bootloader.
  *

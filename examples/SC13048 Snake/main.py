@@ -1,3 +1,6 @@
+# Copyright (c) GHI Electronics.
+# SPDX-License-Identifier: MIT
+#
 # SITCore SC13048 -- Snake
 #
 # The classic snake game on a 128x160 ST7735 TFT.  Grow the snake by eating

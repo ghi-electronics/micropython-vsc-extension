@@ -1,3 +1,6 @@
+// Copyright (c) GHI Electronics.
+// SPDX-License-Identifier: MIT
+
 /**
  * Flashing an ESP32 through its ROM loader.
  *

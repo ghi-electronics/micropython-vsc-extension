@@ -1,3 +1,6 @@
+// Copyright (c) GHI Electronics.
+// SPDX-License-Identifier: MIT
+
 /**
  * What to do when F5 is pressed on a board that cannot be debugged.
  *

@@ -1,9 +1,13 @@
+// Copyright (c) GHI Electronics.
+// SPDX-License-Identifier: MIT
+
 /**
  * Message framing for the debug channel.
  *
- * Direct counterpart of shared/mpdebug/wireprotocol.c. The two ends must
- * agree byte for byte, so the CRC and the header layout are reproduced exactly
- * rather than approximated.
+ * Direct counterpart of shared/mpdebug/wireprotocol.c on the firmware side.
+ * The two ends must agree byte for byte, so the CRC and the header layout are
+ * reproduced exactly rather than approximated.  The framing derives from the
+ * .NET Micro Framework debug protocol.
  */
 import { MARKER, HEADER_SIZE } from "./protocol";
 
@@ -15,7 +19,7 @@ const CRC_POLY = 0x04c11db7;
  * Computed bitwise rather than from a 256-entry table: the firmware does the
  * same to keep 1 KB out of flash, and matching the implementation keeps the two
  * obviously identical. Verified against the firmware on hardware --
- * crc("GHIPKT1") is 0xe3464cd8 on both sides.
+ * crc(MARKER) is 0xe3464cd8 on both sides.
  */
 export function crc32(data: Buffer, seed = 0): number {
     let c = seed >>> 0;

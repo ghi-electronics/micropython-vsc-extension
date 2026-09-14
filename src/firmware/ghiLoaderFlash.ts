@@ -1,3 +1,6 @@
+// Copyright (c) GHI Electronics.
+// SPDX-License-Identifier: MIT
+
 /**
  * Flashing a GHI SITCore board through its BL2 bootloader.
  *

@@ -1,8 +1,12 @@
+// Copyright (c) GHI Electronics.
+// SPDX-License-Identifier: MIT
+
 /**
  * Wire protocol constants for the MicroPython debug engine.
  *
  * These mirror shared/mpdebug/micropython_debugging.h in the firmware.
  * Any change here must be made there too -- the two are a single contract.
+ * The framing derives from the .NET Micro Framework debug protocol.
  */
 
 /** 7 characters plus NUL, stuffed into 8 bytes. */
