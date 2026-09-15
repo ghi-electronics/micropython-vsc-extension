@@ -12,8 +12,9 @@
       "version": "1.29.0-37-gb1602d56fe",
       "date": "2026-09-15",
       "url": "micropython-rpi-pico-v1.29.0-37-gb1602d56fe.uf2",
-      "md5": "C1BF7B4870474AFE412B5B198B20F8BE",
+      "md5": "8EEFCFFCCF14C24839EFC79B230C4DA0",
       "size": 732160,
+      "update_fw_id": "GHIMPDG002",
       "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
     },
     {
@@ -26,8 +27,9 @@
       "version": "1.29.0-37-gb1602d56fe",
       "date": "2026-09-15",
       "url": "micropython-rpi-pico2-v1.29.0-37-gb1602d56fe.uf2",
-      "md5": "4B43BBFD3953BB5F5DE2BE7A1358944C",
+      "md5": "A6DE71C50071956F4FE160E3A0D41FD4",
       "size": 710656,
+      "update_fw_id": "GHIMPDG003",
       "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
     },
     {
@@ -40,8 +42,9 @@
       "version": "1.29.0-37-gb1602d56fe",
       "date": "2026-09-15",
       "url": "micropython-qtpy-rp2040-v1.29.0-37-gb1602d56fe.uf2",
-      "md5": "4912D76D449B5C490AC10B40E4FAB88D",
+      "md5": "AA8BF2D5F0FFF81B24A8267E218101EF",
       "size": 727552,
+      "update_fw_id": "GHIMPDG004",
       "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
     },
     {
@@ -57,8 +60,9 @@
       "version": "1.29.0-37-gb1602d56fe",
       "date": "2026-09-15",
       "url": "micropython-esp32-s2-v1.29.0-37-gb1602d56fe.bin",
-      "md5": "380ADAC1A8036BC3134B4B5C0FA1765E",
-      "size": 1575040,
+      "md5": "D8D239A18547D035BB2B67963FD67052",
+      "size": 1575088,
+      "update_fw_id": "GHIMPDG005",
       "address": 0,
       "chip": "ESP32-S2",
       "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
@@ -76,8 +80,9 @@
       "version": "1.29.0-37-gb1602d56fe",
       "date": "2026-09-15",
       "url": "micropython-xiao-esp32s3-v1.29.0-37-gb1602d56fe.bin",
-      "md5": "B96D7990D2FB72E6CB638F5F20C3B3ED",
-      "size": 1819936,
+      "md5": "C8FA32C1CFA233860D153DF42B21DB7F",
+      "size": 1819984,
+      "update_fw_id": "GHIMPDG006",
       "address": 0,
       "chip": "ESP32-S3",
       "resetBefore": "usb_reset",
@@ -96,8 +101,9 @@
       "version": "1.29.0-37-gb1602d56fe",
       "date": "2026-09-15",
       "url": "micropython-esp32-s3-octal-psram-v1.29.0-37-gb1602d56fe.bin",
-      "md5": "6C4E116587484DD0965A249AF1C3FE61",
-      "size": 1822752,
+      "md5": "4B003E5151598CE688DAA3A5D0CCC5B2",
+      "size": 1822800,
+      "update_fw_id": "GHIMPDG007",
       "address": 0,
       "chip": "ESP32-S3",
       "resetBefore": "usb_reset",
@@ -116,8 +122,9 @@
       "version": "1.29.0-37-gb1602d56fe",
       "date": "2026-09-15",
       "url": "micropython-sc13048-v1.29.0-37-gb1602d56fe.ghi",
-      "md5": "1BA358105130C1E52D1161B0D816411C",
+      "md5": "739B664CFD86F3C9FEB18DD461DE00BD",
       "size": 361472,
+      "update_fw_id": "GHIMPDG001",
       "enterBootloader": "Hold LDR, tap RESET, then release LDR."
     }
   ]
