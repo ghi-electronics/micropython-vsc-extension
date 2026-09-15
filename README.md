@@ -53,6 +53,27 @@ Existing project:
 2. Hit **F5** and select `MicroPython`.
 3. The extension offers to save a launch configuration afterwards so F5 stops asking.
 
+## Firmware updates
+
+Your board is kept in step with the latest release from
+[GHI Electronics](https://www.ghielectronics.com) so you never miss a fix or new feature.
+
+**First-time install.** On F5 with a board running stock MicroPython (or nothing yet), the
+extension offers to install the debugger firmware. Click **Install**, then put the board
+into its bootloader (hold BOOT and tap RESET; LDR on SITCore).
+
+![Prompt offering to install the debugger firmware](images/update_fw_prompt_get_started.png)
+
+**Later updates.** Once the debugger firmware is on your board, each F5 checks for a
+newer release and offers to install it.
+
+![Firmware update prompt with Update, Don't ask again and Not now buttons](images/update_fw_prompt.png)
+
+- **Update** — installs the new firmware, then press F5 again to start debugging on it.
+- **Not now** — this F5 continues with the current firmware; the check runs again on the next F5.
+- **Don't ask again** — the check is disabled for this project by setting
+  `"checkFirmwareUpdate": false` in `.vscode/launch.json`. Comments and other fields are preserved.
+
 ## Supported hardware
 
 MicroPython debug support is compiled and tested on some boards for you. 

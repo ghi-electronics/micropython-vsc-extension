@@ -100,7 +100,7 @@ export async function offerFirmwareInstall(): Promise<string | undefined> {
         "Do you want to install the firmware that supports debugging?",
         {
             modal: true,
-            detail: "No MicroPython debugger firmware was found on the connected board. "
+            detail: "No MicroPython debugger firmware was found on the board, or no board is connected. "
                 + "Installing replaces the firmware on the board and erases files stored on it.",
         },
         "Install");
