@@ -59,15 +59,15 @@ Your board is kept in step with the latest release from
 [GHI Electronics](https://www.ghielectronics.com) so you never miss a fix or new feature.
 
 **First-time install.** On F5 with a board running stock MicroPython (or nothing yet), the
-extension offers to install the debugger firmware. Click **Install**, then put the board
-into its bootloader (hold BOOT and tap RESET; LDR on SITCore).
+extension offers to install the debugger firmware. Click **Install**, follow the
+instruction steps to install firmware into the device.
 
-![Prompt offering to install the debugger firmware](images/update_fw_prompt_get_started.png)
+<img src="images/update_fw_prompt_get_started.png" alt="Prompt offering to install the debugger firmware" width="480" />
 
-**Later updates.** Once the debugger firmware is on your board, each F5 checks for a
+**Later updates.** Once the debugger firmware is on your board, F5 checks for a
 newer release and offers to install it.
 
-![Firmware update prompt with Update, Don't ask again and Not now buttons](images/update_fw_prompt.png)
+<img src="images/update_fw_prompt.png" alt="Firmware update prompt with Update, Don't ask again and Not now buttons" width="480" />
 
 - **Update** — installs the new firmware, then press F5 again to start debugging on it.
 - **Not now** — this F5 continues with the current firmware; the check runs again on the next F5.
