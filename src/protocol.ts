@@ -133,6 +133,7 @@ export const USB_PID_CDC2 = 0xf105;
 export interface KnownDevice { vid: number; pid: number; name: string; }
 export const KNOWN_DEVICES: KnownDevice[] = [
     { vid: 0x1b9f, pid: 0xf105, name: "SITCore SC13xxx" },
+    { vid: 0x1b9f, pid: 0xf106, name: "SITCore SC20xxx" },
     { vid: 0x2e8a, pid: 0x0005, name: "Raspberry Pi Pico / Pico 2" },
     { vid: 0x239a, pid: 0x80f8, name: "Adafruit QT Py RP2040" },
     // esp32 computes its PID from a CFG_TUD_* bitmap, so two CDCs yields 0x4002

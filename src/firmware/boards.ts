@@ -128,16 +128,6 @@ export const SERIAL_BOOTLOADERS: {
         },
         ambiguous: true,
     },
-    {
-        // GHI SITCore BL2 bootloader, presented over CDC. Same VID/PID across
-        // every SITCore variant (SC13xxx, SC20xxx, ...); the chip family is
-        // resolved from the .ghi file's header, not from the USB identity.
-        vid: 0x1b9f, pid: 0x0104,
-        board: {
-            id: "SC13048", deviceSupport: "SITCore SC13xxx (SC13048, FEZ Flea)",
-            kind: "ghi-loader",
-        },
-    },
 ];
 
 /**
@@ -197,12 +187,6 @@ export function manualFlashChoices(): BootBoard[] {
             chip: "ESP32-S3",
             resetBefore: "usb_reset",
             enterBootloader: "Hold BOOT, tap RESET, then release BOOT.",
-        },
-        {
-            id: "SC13048",
-            deviceSupport: "GHI SITCore SC13xxx (SC13048, FEZ Flea)",
-            kind: "ghi-loader",
-            enterBootloader: "Hold LDR, tap RESET, then release LDR.",
         },
     ];
 }
