@@ -125,6 +125,10 @@ export const USB_PID_CDC2 = 0xf105;
  * keeps stock MicroPython's VID/PID: a board running stock firmware therefore
  * matches here too, but exposes only one CDC, so findPorts() finds a REPL and
  * no debug channel -- which is the correct answer for it.
+ *
+ * VID/PID is only used to locate the port and identify a supported device
+ * class; the update check uses MICROPY_HW_BOARD_NAME (from the manifest) to
+ * decide which release group the running firmware belongs to.
  */
 export interface KnownDevice { vid: number; pid: number; name: string; }
 export const KNOWN_DEVICES: KnownDevice[] = [
@@ -133,7 +137,7 @@ export const KNOWN_DEVICES: KnownDevice[] = [
     { vid: 0x239a, pid: 0x80f8, name: "Adafruit QT Py RP2040" },
     // esp32 computes its PID from a CFG_TUD_* bitmap, so two CDCs yields 0x4002
     // where stock (one CDC) is 0x4001 -- a distinct identity for free.
-    { vid: 0x303a, pid: 0x4002, name: "ESP32-S2 / S3 (dual CDC)" },
+    { vid: 0x303a, pid: 0x4002, name: "ESP32-S2 / S3" },
 ];
 
 /**

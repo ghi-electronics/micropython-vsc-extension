@@ -101,10 +101,16 @@
                 "description": "Push changed workspace .py files to the device before running.",
                 "default": true
               },
+              "debugPort": {
+                "type": "string",
+                "description": "Serial port of the debug channel (CDC1). Leave empty (or omit) to auto-detect. Set explicitly when auto-detect picks the wrong port -- for example on ChromeOS, or on a machine where more than one board is plugged in.",
+                "default": ""
+              },
               "device": {
                 "type": "string",
-                "description": "Serial port of the debug channel (CDC1). Empty means auto-detect.",
-                "default": ""
+                "description": "Deprecated: use debugPort. Kept for backward compatibility with existing launch.json files; debugPort wins if both are set.",
+                "default": "",
+                "deprecationMessage": "Renamed to debugPort."
               },
               "stopOnEntry": {
                 "type": "boolean",
@@ -118,6 +124,11 @@
                 },
                 "description": "Extra files to deploy, as globs relative to the program. Code (.py and .mpy) is always deployed; use this for data files the program reads at runtime, e.g. [\"data/*.json\"].",
                 "default": []
+              },
+              "checkFirmwareUpdate": {
+                "type": "boolean",
+                "description": "On F5, check the firmware manifest for a newer version and offer to update. Set false to skip the check for this project.",
+                "default": true
               }
             }
           }
@@ -129,8 +140,8 @@
             "name": "MicroPython Deploy and Debug (USB)",
             "program": "${workspaceFolder}/main.py",
             "sync": true,
-            "device": "",
-            "stopOnEntry": false
+            "stopOnEntry": false,
+            "checkFirmwareUpdate": true
           }
         ],
         "configurationSnippets": [
@@ -143,8 +154,8 @@
               "name": "MicroPython Deploy and Debug (USB)",
               "program": "^\"\\${workspaceFolder}/main.py\"",
               "sync": true,
-              "device": "",
-              "stopOnEntry": false
+              "stopOnEntry": false,
+              "checkFirmwareUpdate": true
             }
           }
         ]

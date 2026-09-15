@@ -16,8 +16,11 @@ import {
 import { DebugProtocol } from "@vscode/debugprotocol";
 import * as path from "path";
 import * as fs from "fs";
+import * as vscode from "vscode";
 import { DeviceLink, findPorts, StackFrameInfo, DeviceCapabilities, DeviceVariable } from "./deviceLink";
 import { offerFirmwareInstall } from "./firmware/notInstalled";
+import { checkForUpdate, disableForProject } from "./firmware/updateCheck";
+import { updateFirmwareForFamily } from "./firmware/updateFirmware";
 import { Cond, RebootFlag, StepMode, StopReason, STOP_REASON_TO_DAP, Scope as DevScope } from "./protocol";
 import { crc32 } from "./wireProtocol";
 import { deriveLocalNames, verifyAgainstDevice } from "./localNames";
@@ -25,6 +28,9 @@ import { deriveLocalNames, verifyAgainstDevice } from "./localNames";
 interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
     program: string;
     sync?: boolean;
+    /** Serial port of the debug channel (CDC1). Empty means auto-detect. */
+    debugPort?: string;
+    /** Deprecated, superseded by debugPort. Kept for existing launch.json files. */
     device?: string;
     stopOnEntry?: boolean;
     /**
@@ -33,6 +39,12 @@ interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
      * reads at runtime -- a config file, a lookup table, a calibration blob.
      */
     include?: string[];
+    /**
+     * On F5, check the firmware manifest for a newer version and offer to
+     * update.  Defaults to true; set false to skip the check for this project
+     * -- "Don't ask again" in the prompt writes that here.
+     */
+    checkFirmwareUpdate?: boolean;
 }
 
 /** The device is single-threaded; DAP still requires a thread id. */
@@ -65,7 +77,10 @@ export class MicroPythonDebugSession extends DebugSession {
      */
     private deployedLocal = new Map<string, string>();
 
-    public constructor() {
+    public constructor(
+        private readonly context: vscode.ExtensionContext,
+        private readonly output: vscode.OutputChannel,
+    ) {
         super();
         this.setDebuggerLinesStartAt1(true);
         this.setDebuggerColumnsStartAt1(true);
@@ -120,7 +135,10 @@ export class MicroPythonDebugSession extends DebugSession {
             this.entryName = path.basename(args.program);
 
             const ports = await findPorts();
-            let devicePort = args.device || ports.debug;
+            // debugPort is the current field; args.device is kept as a fallback
+            // so a launch.json written before the rename still works.
+            const overridePort = args.debugPort || args.device;
+            let devicePort = overridePort || ports.debug;
             if (!devicePort) {
                 // The commonest first experience: the extension is new, the
                 // board is running whatever it shipped with, and F5 has just
@@ -139,6 +157,25 @@ export class MicroPythonDebugSession extends DebugSession {
                 this.sendEvent(new TerminatedEvent());
                 return;
             }
+
+            // Before touching the debug channel, see whether the manifest has a
+            // newer firmware.  Needs the REPL port (CDC0); the check is silent
+            // and skipped whenever anything about it is unavailable so a
+            // network outage or an ancient firmware never blocks F5.
+            if (args.checkFirmwareUpdate === false) {
+                this.output.appendLine("[updateCheck] disabled by launch.json (checkFirmwareUpdate=false)");
+            } else if (!ports.repl) {
+                this.output.appendLine("[updateCheck] skipped: no REPL port was detected -- "
+                    + "the check needs both debug and REPL CDC endpoints");
+            } else {
+                const cancelled = await this.offerFirmwareUpdate(ports.repl);
+                if (cancelled) {
+                    this.sendResponse(response);
+                    this.sendEvent(new TerminatedEvent());
+                    return;
+                }
+            }
+
             await this.link.open(devicePort);
             this.attachEvents();
 
@@ -165,7 +202,7 @@ export class MicroPythonDebugSession extends DebugSession {
             await this.link.reboot(RebootFlag.WaitForDebugger);
             await this.link.close();
             await delay(1200);
-            await this.reconnect(args.device);
+            await this.reconnect(overridePort);
             await this.link.conditions(Cond.Attached, 0);
 
             try {
@@ -182,6 +219,51 @@ export class MicroPythonDebugSession extends DebugSession {
         } catch (err) {
             this.sendErrorResponse(response, 1001, (err as Error).message);
         }
+    }
+
+    /**
+     * If the manifest has a newer firmware than the device is running, prompt
+     * the user.  Returns true when the launch should be cancelled (user chose
+     * to update instead) and false to continue with F5.
+     *
+     * Three answers:
+     *  - "Update"          run the firmware updater; cancel this launch.
+     *                      The user re-presses F5 once the updater finishes.
+     *  - "Not now"         skip the check this time; ask again next F5.
+     *  - "Don't ask again" write checkFirmwareUpdate: false to launch.json,
+     *                      so this project never prompts again.
+     */
+    private async offerFirmwareUpdate(replPort: string): Promise<boolean> {
+        const update = await checkForUpdate(
+            this.context, replPort, (s) => this.output.appendLine(s));
+        if (!update) {
+            return false;
+        }
+        // MessageItem[] rather than string[]: modal showInformationMessage adds
+        // an implicit Cancel unless one of our own items claims the close
+        // affordance.  "Not now" is the natural close, so it takes that role
+        // and the extra Cancel button goes away.
+        const update_ = { title: "Update" };
+        const notNow = { title: "Not now", isCloseAffordance: true };
+        const dontAsk = { title: "Don't ask again" };
+        const answer = await vscode.window.showInformationMessage<vscode.MessageItem>(
+            `A newer firmware is available for ${update.family.device_support}.`
+            + `\n\nCurrent: ${update.currentVersion}`
+            + `\nLatest:  ${update.latestVersion}`,
+            { modal: true },
+            update_, notNow, dontAsk);
+        if (answer?.title === update_.title) {
+            // Skip the board-picker: the check already identified the family
+            // via the device's GHIMPDG id, so making the user confirm it would
+            // be asking the same question twice.
+            void updateFirmwareForFamily(this.context, this.output, update.family.id);
+            return true;
+        }
+        if (answer?.title === dontAsk.title) {
+            const folder = vscode.workspace.workspaceFolders?.[0];
+            await disableForProject(folder);
+        }
+        return false;
     }
 
     /**

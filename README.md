@@ -206,7 +206,7 @@ ChromeOS **Settings → About ChromeOS → Developers → Linux → Manage USB
 devices**, then pin the debug port in `.vscode/launch.json`:
 
 ```jsonc
-"device": "/dev/ttyACM1"
+"debugPort": "/dev/ttyACM1"
 ```
 
 Auto-detect does not work in Crostini because pass-through USB devices carry

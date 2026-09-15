@@ -42,6 +42,15 @@ export interface FirmwareFamily {
     /** Matches the MicroPython board name, e.g. "RPI_PICO2". */
     id: string;
     /**
+     * Per-family update identifier (e.g. "GHIMPDG002"), baked into the
+     * firmware's MICROPY_HW_BOARD_NAME and echoed by os.uname().machine.
+     * The update check extracts this token from the machine string and
+     * looks it up here for a direct 1:1 match -- no grouping, no fuzzy
+     * matching, no VID/PID inference.  Missing on families predating this
+     * scheme, in which case the check silently skips (safe default).
+     */
+    update_fw_id?: string;
+    /**
      * The parts this entry covers, listed for the user.
      *
      * A single entry often serves several devices -- one SITCore build covers

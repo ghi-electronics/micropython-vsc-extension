@@ -424,6 +424,33 @@ export async function updateFirmware(
     }
 }
 
+/**
+ * Same as updateFirmware() but skips the board-picker: the caller already
+ * knows which family to install (the F5 update check identified it via the
+ * device's GHIMPDG id).  Saves the user from confirming a fact the extension
+ * already established.
+ */
+export async function updateFirmwareForFamily(
+    context: vscode.ExtensionContext,
+    output: vscode.OutputChannel,
+    familyId: string,
+): Promise<UpdateResult> {
+    if (busy) {
+        fail("An update is already running",
+            "Wait for it to finish before starting another.");
+        return "failed";
+    }
+    busy = true;
+    try {
+        return await updateFirmwareInner(context, output, familyId);
+    } catch (err) {
+        fail("Firmware update failed", describe(err));
+        return "failed";
+    } finally {
+        busy = false;
+    }
+}
+
 /** Best-effort readable text for anything that can be thrown. */
 function describe(err: unknown): string {
     if (err instanceof Error) {
@@ -435,6 +462,7 @@ function describe(err: unknown): string {
 async function updateFirmwareInner(
     context: vscode.ExtensionContext,
     output: vscode.OutputChannel,
+    preselectedFamilyId?: string,
 ): Promise<UpdateResult> {
     let loaded: Awaited<ReturnType<typeof loadManifest>>;
     try {
@@ -473,7 +501,30 @@ async function updateFirmwareInner(
     // The board is chosen first, so everything after it follows from one
     // deliberate answer rather than a guess: which bootloader to wait for, what
     // to tell the user to press, and which chip must answer before a write.
-    const board = await chooseBoard(context, manifest);
+    // When the F5 check has already identified the board (via GHIMPDG id), the
+    // picker is skipped: the manifest entry becomes the same BootBoard shape
+    // that publishedFor() would have produced.
+    let board: BootBoard | undefined;
+    if (preselectedFamilyId) {
+        const f = manifest.families.find((x) => x.id === preselectedFamilyId);
+        if (!f) {
+            fail(`Firmware for ${preselectedFamilyId} is not in the manifest`,
+                "The extension identified your board, but the firmware index "
+                + "has no matching entry.  Try 'Update Device Firmware' to "
+                + "pick from the published list.");
+            return "failed";
+        }
+        board = {
+            id: f.id,
+            deviceSupport: f.device_support ?? f.id,
+            kind: f.kind ?? "uf2-drive",
+            chip: f.chip,
+            resetBefore: f.resetBefore,
+            enterBootloader: f.enterBootloader,
+        };
+    } else {
+        board = await chooseBoard(context, manifest);
+    }
     if (!board) {
         return "cancelled";
     }
@@ -639,11 +690,20 @@ async function flashFromFileInner(
         return;
     }
 
-    const wantUf2 = board.kind === "uf2-drive";
+    // The file extension is tied to the flash mechanism, not the chip: a UF2
+    // drive takes .uf2 whatever the chip is, an Espressif ROM loader takes the
+    // merged .bin, and the SITCore BL2 bootloader takes the signed .ghi.
+    const filter = ((): { [name: string]: string[] } => {
+        switch (board.kind) {
+            case "uf2-drive":  return { "UF2 firmware": ["uf2"] };
+            case "esp-rom":    return { "ESP32 image": ["bin"] };
+            case "ghi-loader": return { "SITCore firmware": ["ghi"] };
+        }
+    })();
     const picked = await vscode.window.showOpenDialog({
         title: `Firmware for ${board.id}`,
         canSelectMany: false,
-        filters: wantUf2 ? { "UF2 firmware": ["uf2"] } : { "ESP32 image": ["bin"] },
+        filters: filter,
     });
     if (!picked || picked.length === 0) {
         return;

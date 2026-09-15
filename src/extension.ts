@@ -30,7 +30,7 @@ export function activate(context: vscode.ExtensionContext): void {
     void openPendingProject(context);
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory(
-            "micropython", new InlineAdapterFactory()),
+            "micropython", new InlineAdapterFactory(context, output)),
         vscode.debug.registerDebugConfigurationProvider(
             "micropython", new ConfigProvider()),
         vscode.commands.registerCommand(
@@ -63,9 +63,13 @@ export function activate(context: vscode.ExtensionContext): void {
 export function deactivate(): void { /* nothing to tear down */ }
 
 class InlineAdapterFactory implements vscode.DebugAdapterDescriptorFactory {
+    constructor(
+        private readonly context: vscode.ExtensionContext,
+        private readonly output: vscode.OutputChannel,
+    ) { }
     createDebugAdapterDescriptor(): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
         return new vscode.DebugAdapterInlineImplementation(
-            new MicroPythonDebugSession() as unknown as vscode.DebugAdapter);
+            new MicroPythonDebugSession(this.context, this.output) as unknown as vscode.DebugAdapter);
     }
 }
 
@@ -253,19 +257,31 @@ const SAMPLE_MAIN = [
     "",
 ].join("\n");
 
-const SAMPLE_LAUNCH = {
-    version: "0.2.0",
-    configurations: [
+// launch.json is JSONC (VS Code parses it with comments allowed), so the
+// scaffold can carry a commented-out debugPort line for users who need to
+// override auto-detect -- ChromeOS's serial enumeration is the common case,
+// or a machine with more than one board plugged in.  Written as a raw string
+// rather than JSON.stringify, so the comments survive.
+const SAMPLE_LAUNCH = `{
+    "version": "0.2.0",
+    "configurations": [
         {
-            type: "micropython",
-            request: "launch",
-            name: "MicroPython Deploy and Debug (USB)",
-            program: "${workspaceFolder}/main.py",
-            sync: true,
-            stopOnEntry: false,
-        },
-    ],
-};
+            "type": "micropython",
+            "request": "launch",
+            "name": "MicroPython Deploy and Debug (USB)",
+            // Uncomment and set when auto-detect picks the wrong port
+            // (ChromeOS, or more than one board on the same machine):
+            // "debugPort": "/dev/ttyACM1",
+            "program": "\${workspaceFolder}/main.py",
+            "sync": true,
+            "stopOnEntry": false,
+            // On F5, check the manifest for a newer firmware and offer to
+            // update. Set false to skip the check for this project.
+            "checkFirmwareUpdate": true
+        }
+    ]
+}
+`;
 
 /**
  * Scaffold a brand-new project: ask for the parent folder and a project name,
@@ -394,7 +410,8 @@ function writeLaunchJson(root: string): boolean {
         return false;
     }
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(SAMPLE_LAUNCH, null, 4) + "\n", "utf8");
+    // SAMPLE_LAUNCH is already the exact text to write, JSONC comments and all.
+    fs.writeFileSync(file, SAMPLE_LAUNCH, "utf8");
     return true;
 }
 

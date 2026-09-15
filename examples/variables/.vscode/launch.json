@@ -7,7 +7,7 @@
             "name": "MicroPython Deploy and Debug (USB)",
             "program": "${workspaceFolder}/main.py",
             "sync": true,
-            "device": "",
+            "debugPort": "",
             "stopOnEntry": false
         }
     ]

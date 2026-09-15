@@ -37,6 +37,15 @@ import sys
 # "artifact" is relative to the micropython root.  "esp_parts" replaces it for
 # esp32, where the artifact has to be merged first.  "publish" is the file name
 # on the website; {version} is substituted.
+#
+# "update_fw_id" is the unique per-family identifier baked into
+# MICROPY_HW_BOARD_NAME at compile time (e.g. "GHI Electronics SITCore
+# SC13048 GHIMPDG001") and echoed by os.uname().machine at runtime.  The
+# update check pulls the GHIMPDG### token out of the machine string and
+# matches it here for a direct 1:1 lookup -- no grouping, no fuzzy matching,
+# no VID/PID inference.  Adding a new board is just "assign it the next
+# GHIMPDG number".  The prefix stands for "GHI Electronics MicroPython
+# Debugger"; the three-digit suffix supports up to 999 supported devices.
 BOARDS = [
     {
         "id": "RPI_PICO",
@@ -45,6 +54,7 @@ BOARDS = [
         "bootloader": {"boardId": "RPI-RP2"},
         "enterBootloader": "Unplug the board, then plug the USB cable back in "
                            "while holding BOOTSEL.",
+        "update_fw_id": "GHIMPDG002",
         "artifact": "ports/rp2/build-RPI_PICO/firmware.uf2",
         "publish": "micropython-rpi-pico-v{version}.uf2",
     },
@@ -55,6 +65,7 @@ BOARDS = [
         "bootloader": {"boardId": "RP2350"},
         "enterBootloader": "Unplug the board, then plug the USB cable back in "
                            "while holding BOOTSEL.",
+        "update_fw_id": "GHIMPDG003",
         "artifact": "ports/rp2/build-RPI_PICO2/firmware.uf2",
         "publish": "micropython-rpi-pico2-v{version}.uf2",
     },
@@ -64,6 +75,7 @@ BOARDS = [
         "kind": "uf2-drive",
         "bootloader": {"boardId": "RPI-RP2"},
         "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
+        "update_fw_id": "GHIMPDG004",
         "artifact": "ports/rp2/build-ADAFRUIT_QTPY_RP2040/firmware.uf2",
         "publish": "micropython-qtpy-rp2040-v{version}.uf2",
     },
@@ -75,6 +87,7 @@ BOARDS = [
         "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
         "chip": "ESP32-S2",
         "address": 0,
+        "update_fw_id": "GHIMPDG005",
         "esp_build": "ports/esp32/build-ESP32_GENERIC_S2",
         "publish": "micropython-esp32-s2-v{version}.bin",
     },
@@ -92,6 +105,7 @@ BOARDS = [
         # earlier connection reports bad flash geometry and the write fails.
         "resetBefore": "usb_reset",
         "address": 0,
+        "update_fw_id": "GHIMPDG006",
         "esp_build": "ports/esp32/build-SEEED_XIAO_ESP32S3",
         "publish": "micropython-xiao-esp32s3-v{version}.bin",
     },
@@ -113,6 +127,7 @@ BOARDS = [
         "chip": "ESP32-S3",
         "resetBefore": "usb_reset",
         "address": 0,
+        "update_fw_id": "GHIMPDG007",
         "esp_build": "ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT",
         "publish": "micropython-esp32-s3-octal-psram-v{version}.bin",
     },
@@ -126,6 +141,7 @@ BOARDS = [
         "kind": "ghi-loader",
         "bootloader": {"usb": {"vid": "0x1B9F", "pid": "0x0104"}},
         "enterBootloader": "Hold LDR, tap RESET, then release LDR.",
+        "update_fw_id": "GHIMPDG001",
         "artifact": "ports/stm32/build-SC13048Q/firmware.ghi",
         "publish": "micropython-sc13048-v{version}.ghi",
     },
@@ -270,6 +286,8 @@ def main():
             "md5": hashlib.md5(data).hexdigest().upper(),
             "size": len(data),
         }
+        if "update_fw_id" in board:
+            entry["update_fw_id"] = board["update_fw_id"]
         if "address" in board:
             entry["address"] = board["address"]
         if "chip" in board:
