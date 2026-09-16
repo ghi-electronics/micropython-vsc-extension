@@ -93,6 +93,10 @@ Run `MicroPython: Update Device Firmware` in the Command Palette, pick the firmw
 
 > **Note.** A generic firmware boots on any board in the same chip family, so the debugger still works either way — breakpoints, step, print and deploy are unaffected. What changes is memory. Flash `ESP32_S3_GENERIC` onto an `ESP32-S3 N16R8 Development Board`, for example, and its 8 MB Octal PSRAM stays dark; the board then runs on the ESP32-S3's ~200 KB internal SRAM alone. Pick the firmware named in the row for your board to get the full memory it ships with.
 
+### Build firmware for your own board
+
+Not in the list, or want to tune the build for your exact hardware (flash size, PSRAM mode, pin map)? Build the firmware from source — the [MicroPython fork with the debugger integration](https://github.com/ghi-electronics/micropython-fw-debugger) has the prerequisites, the board-config settings the debugger needs, and per-port notes.
+
 [fw-rp2040]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rp2040-generic-v1.29.0-39-g14984d812b.uf2
 
 [fw-rp2350]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rp2350-generic-v1.29.0-39-g14984d812b.uf2
