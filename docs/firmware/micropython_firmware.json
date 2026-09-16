@@ -34,7 +34,7 @@
     },
     {
       "id": "ESP32_S2_GENERIC",
-      "device_support": "ESP32-S2 Generic (with or without PSRAM)",
+      "device_support": "ESP32-S2 Generic with PSRAM or none",
       "kind": "esp-rom",
       "bootloader": {
         "usb": {
@@ -54,7 +54,7 @@
     },
     {
       "id": "ESP32_S3_GENERIC",
-      "device_support": "ESP32-S3 Generic (no PSRAM or Quad PSRAM)",
+      "device_support": "ESP32-S3 with Quad PSRAM or none",
       "kind": "esp-rom",
       "bootloader": {
         "usb": {
