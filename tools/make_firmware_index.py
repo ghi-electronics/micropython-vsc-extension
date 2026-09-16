@@ -48,40 +48,41 @@ import sys
 # Debugger"; the three-digit suffix supports up to 999 supported devices.
 BOARDS = [
     {
-        "id": "RPI_PICO",
-        "device_support": "Raspberry Pi Pico",
+        # RP2040 generic build: covers Raspberry Pi Pico, Pico H, Pico W (no
+        # WiFi and no onboard LED on the W -- LED is behind the CYW43), and
+        # any other RP2040 board with >= 2 MB flash.  On boards with larger
+        # flash only the first 2 MB is used -- RP2040 MicroPython does not
+        # dynamically size the filesystem.
+        "id": "RP2040",
+        "device_support": "RP2040 Generic — Raspberry Pi Pico, Pico W (no WiFi, no onboard LED)",
         "kind": "uf2-drive",
         "bootloader": {"boardId": "RPI-RP2"},
         "enterBootloader": "Unplug the board, then plug the USB cable back in "
                            "while holding BOOTSEL.",
         "update_fw_id": "GHIMPDG002",
         "artifact": "ports/rp2/build-RPI_PICO/firmware.uf2",
-        "publish": "micropython-rpi-pico-v{version}.uf2",
+        "publish": "micropython-rp2040-generic-v{version}.uf2",
     },
     {
-        "id": "RPI_PICO2",
-        "device_support": "Raspberry Pi Pico 2",
+        # RP2350 generic build: Pico 2, Pico 2 W (no WiFi and no onboard LED
+        # on the W), and any other RP2350 board with >= 4 MB flash.
+        "id": "RP2350",
+        "device_support": "RP2350 Generic — Raspberry Pi Pico 2, Pico 2 W (no WiFi, no onboard LED)",
         "kind": "uf2-drive",
         "bootloader": {"boardId": "RP2350"},
         "enterBootloader": "Unplug the board, then plug the USB cable back in "
                            "while holding BOOTSEL.",
         "update_fw_id": "GHIMPDG003",
         "artifact": "ports/rp2/build-RPI_PICO2/firmware.uf2",
-        "publish": "micropython-rpi-pico2-v{version}.uf2",
+        "publish": "micropython-rp2350-generic-v{version}.uf2",
     },
     {
-        "id": "ADAFRUIT_QTPY_RP2040",
-        "device_support": "Adafruit QT Py RP2040",
-        "kind": "uf2-drive",
-        "bootloader": {"boardId": "RPI-RP2"},
-        "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
-        "update_fw_id": "GHIMPDG004",
-        "artifact": "ports/rp2/build-ADAFRUIT_QTPY_RP2040/firmware.uf2",
-        "publish": "micropython-qtpy-rp2040-v{version}.uf2",
-    },
-    {
-        "id": "ESP32_GENERIC_S2",
-        "device_support": "ESP32-S2",
+        # ESP32-S2 generic build: the stock ESP32_GENERIC_S2 build has quad
+        # PSRAM enabled with CONFIG_SPIRAM_IGNORE_NOTFOUND=y, so it boots
+        # cleanly on both PSRAM and no-PSRAM S2 modules.  Flash size >= 4 MB
+        # is auto-detected at boot; the vfs partition takes whatever is left.
+        "id": "ESP32_S2_GENERIC",
+        "device_support": "ESP32-S2 Generic (with or without PSRAM)",
         "kind": "esp-rom",
         "bootloader": {"usb": {"vid": "0x303A", "pid": "0x0002"}},
         "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
@@ -89,38 +90,36 @@ BOARDS = [
         "address": 0,
         "update_fw_id": "GHIMPDG005",
         "esp_build": "ports/esp32/build-ESP32_GENERIC_S2",
-        "publish": "micropython-esp32-s2-v{version}.bin",
+        "publish": "micropython-esp32-s2-generic-v{version}.bin",
     },
     {
-        "id": "SEEED_XIAO_ESP32S3",
-        "device_support": "Seeed XIAO ESP32-S3",
+        # ESP32-S3 generic build: default ESP32_GENERIC_S3 has quad PSRAM
+        # enabled with CONFIG_SPIRAM_IGNORE_NOTFOUND=y.  Boots on:
+        #   - No-PSRAM S3 modules (N4, N8, N16): PSRAM probe fails, board
+        #     runs with just the on-chip 512 KB SRAM, everything else works.
+        #   - Quad-PSRAM S3 modules (N4R2, N8R2, N8R8-quad, etc.): PSRAM
+        #     size auto-detected at boot, used as extra heap.
+        # Does NOT boot correctly on Octal-PSRAM boards (N8R8-octal, N16R8V,
+        # N32R8V) -- for those, use ESP32_S3_OCTAL.
+        "id": "ESP32_S3_GENERIC",
+        "device_support": "ESP32-S3 Generic (no PSRAM or Quad PSRAM) — includes Seeed XIAO ESP32-S3",
         "kind": "esp-rom",
-        # S3 exposes its ROM loader over USB Serial/JTAG rather than the OTG
-        # CDC the S2 uses, so it answers to a different PID.
         "bootloader": {"usb": {"vid": "0x303A", "pid": "0x1001"}},
         "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
         "chip": "ESP32-S3",
-        # See boards.ts: the S3 is reached over USB Serial/JTAG, which can reset
-        # it back into download mode. Without that, a stub left running from an
-        # earlier connection reports bad flash geometry and the write fails.
         "resetBefore": "usb_reset",
         "address": 0,
         "update_fw_id": "GHIMPDG006",
-        "esp_build": "ports/esp32/build-SEEED_XIAO_ESP32S3",
-        "publish": "micropython-xiao-esp32s3-v{version}.bin",
+        "esp_build": "ports/esp32/build-ESP32_GENERIC_S3",
+        "publish": "micropython-esp32-s3-generic-v{version}.bin",
     },
     {
-        # One build for the whole category of no-name S3 modules.  Verified on
-        # a HiLetgo N16R8 DevKitC-1 and applicable to a Hosyond 320x480 touch
-        # board measured as the same module: 8 MB octal PSRAM, differing flash
-        # (8/16 MB) and differing flash vendors (GigaDevice, Zbit, Puya).
-        #
-        # Flash size does not need its own build: MicroPython reads the physical
-        # chip size at boot and creates the filesystem from the end of the
-        # application to the end of flash (ports/esp32/main.c), so this covers
-        # 4, 8 and 16 MB parts alike.
-        "id": "ESP32_GENERIC_S3-SPIRAM_OCT",
-        "device_support": "ESP32-S3 with 8 MB PSRAM (N8R8, N16R8)",
+        # ESP32-S3 with octal PSRAM.  Different SPI bus width from Quad, so
+        # requires a distinct build.  Covers N8R8-octal, N16R8V, N32R8V and
+        # any board where the module label ends in "V" (indicating 1.8 V
+        # PSRAM, which is Espressif's convention for Octal parts).
+        "id": "ESP32_S3_OCTAL",
+        "device_support": "ESP32-S3 with Octal PSRAM (N16R8V, N32R8V, or modules ending in \"V\")",
         "kind": "esp-rom",
         "bootloader": {"usb": {"vid": "0x303A", "pid": "0x1001"}},
         "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
@@ -129,21 +128,7 @@ BOARDS = [
         "address": 0,
         "update_fw_id": "GHIMPDG007",
         "esp_build": "ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT",
-        "publish": "micropython-esp32-s3-octal-psram-v{version}.bin",
-    },
-    {
-        # GHI SITCore SC13048.  The .ghi is produced from firmware.bin by
-        # running encrypt_bin.bat (in TinyCLR-Devices) after the stm32 build.
-        # imagegen.exe signs a 1 KB header with the SITCore FirmwareUploadHeaderKey
-        # and lets the bootloader validate + place the payload.
-        "id": "SC13048",
-        "device_support": "GHI SITCore SC13xxx (SC13048, FEZ Flea)",
-        "kind": "ghi-loader",
-        "bootloader": {"usb": {"vid": "0x1B9F", "pid": "0x0104"}},
-        "enterBootloader": "Hold LDR, tap RESET, then release LDR.",
-        "update_fw_id": "GHIMPDG001",
-        "artifact": "ports/stm32/build-SC13048Q/firmware.ghi",
-        "publish": "micropython-sc13048-v{version}.ghi",
+        "publish": "micropython-esp32-s3-octal-v{version}.bin",
     },
 ]
 

@@ -10,10 +10,10 @@
  * this file covers the bootloader state, and the two never overlap.
  *
  * The awkward fact this file exists to manage: **an RP2040 in BOOTSEL does not
- * say which board it is.**  A Pico and a QT Py RP2040 both enumerate as
- * 2e8a:0003 and both write `Board-ID: RPI-RP2` into INFO_UF2.TXT, because that
- * string comes from the chip's ROM, not the board.  RP2350 is distinguishable
- * (different ROM, different drive label), so a Pico 2 needs no prompt.
+ * say which board it is.**  Every RP2040 board enumerates as 2e8a:0003 and
+ * writes `Board-ID: RPI-RP2` into INFO_UF2.TXT because that string comes from
+ * the chip's ROM, not the board.  RP2350 is distinguishable (different ROM,
+ * different drive label), so a Pico 2 needs no prompt.
  */
 
 /** How firmware reaches the chip once it is in the bootloader. */
@@ -68,10 +68,6 @@ export const UF2_FAMILIES: { boardId: string; label: string; boards: BootBoard[]
         boards: [
             {
                 id: "RPI_PICO", deviceSupport: "Raspberry Pi Pico", kind: "uf2-drive",
-            },
-            {
-                id: "ADAFRUIT_QTPY_RP2040", deviceSupport: "Adafruit QT Py RP2040",
-                kind: "uf2-drive",
             },
         ],
     },
@@ -170,11 +166,10 @@ export function manualFlashChoices(): BootBoard[] {
     return [
         {
             id: "RP2040",
-            deviceSupport: "Raspberry Pi Pico, Adafruit QT Py RP2040",
+            deviceSupport: "Raspberry Pi Pico",
             kind: "uf2-drive",
-            // Two boards, two gestures (Pico has no RESET button), so use the
-            // generic wording that covers both.
-            enterBootloader: GENERIC_BOOTLOADER_HINT,
+            enterBootloader:
+                "Unplug the board, then plug the USB cable back in while holding BOOTSEL.",
         },
         {
             id: "RP2350",

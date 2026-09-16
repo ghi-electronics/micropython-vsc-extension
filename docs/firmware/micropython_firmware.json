@@ -3,53 +3,38 @@
   "source": "DebuggerExtension/micropython-vsc-extension/tools/make_firmware_index.py",
   "families": [
     {
-      "id": "RPI_PICO",
-      "device_support": "Raspberry Pi Pico",
+      "id": "RP2040",
+      "device_support": "RP2040 Generic \u2014 Raspberry Pi Pico, Pico W (no WiFi, no onboard LED)",
       "kind": "uf2-drive",
       "bootloader": {
         "boardId": "RPI-RP2"
       },
-      "version": "1.29.0-38-gfd06458b60",
-      "date": "2026-09-15",
-      "url": "micropython-rpi-pico-v1.29.0-38-gfd06458b60.uf2",
-      "md5": "BFDDE28B79A128B0273B980C89ADB5E9",
+      "version": "1.29.0-39-g14984d812b",
+      "date": "2026-09-16",
+      "url": "micropython-rp2040-generic-v1.29.0-39-g14984d812b.uf2",
+      "md5": "400278F4AFD6E8EFA3A3B9F8B14E209B",
       "size": 732160,
       "update_fw_id": "GHIMPDG002",
       "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
     },
     {
-      "id": "RPI_PICO2",
-      "device_support": "Raspberry Pi Pico 2",
+      "id": "RP2350",
+      "device_support": "RP2350 Generic \u2014 Raspberry Pi Pico 2, Pico 2 W (no WiFi, no onboard LED)",
       "kind": "uf2-drive",
       "bootloader": {
         "boardId": "RP2350"
       },
-      "version": "1.29.0-38-gfd06458b60",
-      "date": "2026-09-15",
-      "url": "micropython-rpi-pico2-v1.29.0-38-gfd06458b60.uf2",
-      "md5": "5D3AD4A9F12FD4E1E54FFF9B6585B3D9",
+      "version": "1.29.0-39-g14984d812b",
+      "date": "2026-09-16",
+      "url": "micropython-rp2350-generic-v1.29.0-39-g14984d812b.uf2",
+      "md5": "5D657D2269F5A5D6B6B8D169A27BFB3E",
       "size": 710656,
       "update_fw_id": "GHIMPDG003",
       "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
     },
     {
-      "id": "ADAFRUIT_QTPY_RP2040",
-      "device_support": "Adafruit QT Py RP2040",
-      "kind": "uf2-drive",
-      "bootloader": {
-        "boardId": "RPI-RP2"
-      },
-      "version": "1.29.0-38-gfd06458b60",
-      "date": "2026-09-15",
-      "url": "micropython-qtpy-rp2040-v1.29.0-38-gfd06458b60.uf2",
-      "md5": "B710DA3B0D708B1FE9CD32EA0EE52323",
-      "size": 727552,
-      "update_fw_id": "GHIMPDG004",
-      "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
-    },
-    {
-      "id": "ESP32_GENERIC_S2",
-      "device_support": "ESP32-S2",
+      "id": "ESP32_S2_GENERIC",
+      "device_support": "ESP32-S2 Generic (with or without PSRAM)",
       "kind": "esp-rom",
       "bootloader": {
         "usb": {
@@ -57,10 +42,10 @@
           "pid": "0x0002"
         }
       },
-      "version": "1.29.0-38-gfd06458b60",
-      "date": "2026-09-15",
-      "url": "micropython-esp32-s2-v1.29.0-38-gfd06458b60.bin",
-      "md5": "A5917FC75576844DC69C5835A1D6CD91",
+      "version": "1.29.0-39-g14984d812b",
+      "date": "2026-09-16",
+      "url": "micropython-esp32-s2-generic-v1.29.0-39-g14984d812b.bin",
+      "md5": "375CED5E2CAECA50EFF114CCE2730E10",
       "size": 1575072,
       "update_fw_id": "GHIMPDG005",
       "address": 0,
@@ -68,8 +53,8 @@
       "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
     },
     {
-      "id": "SEEED_XIAO_ESP32S3",
-      "device_support": "Seeed XIAO ESP32-S3",
+      "id": "ESP32_S3_GENERIC",
+      "device_support": "ESP32-S3 Generic (no PSRAM or Quad PSRAM) \u2014 includes Seeed XIAO ESP32-S3",
       "kind": "esp-rom",
       "bootloader": {
         "usb": {
@@ -77,11 +62,11 @@
           "pid": "0x1001"
         }
       },
-      "version": "1.29.0-38-gfd06458b60",
-      "date": "2026-09-15",
-      "url": "micropython-xiao-esp32s3-v1.29.0-38-gfd06458b60.bin",
-      "md5": "7103DA27A567310BB15A2452E07B66DE",
-      "size": 1819968,
+      "version": "1.29.0-39-g14984d812b",
+      "date": "2026-09-16",
+      "url": "micropython-esp32-s3-generic-v1.29.0-39-g14984d812b.bin",
+      "md5": "34017A4247F931885378E0ED73A49E6A",
+      "size": 1819344,
       "update_fw_id": "GHIMPDG006",
       "address": 0,
       "chip": "ESP32-S3",
@@ -89,8 +74,8 @@
       "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
     },
     {
-      "id": "ESP32_GENERIC_S3-SPIRAM_OCT",
-      "device_support": "ESP32-S3 with 8 MB PSRAM (N8R8, N16R8)",
+      "id": "ESP32_S3_OCTAL",
+      "device_support": "ESP32-S3 with Octal PSRAM (N16R8V, N32R8V, or modules ending in \"V\")",
       "kind": "esp-rom",
       "bootloader": {
         "usb": {
@@ -98,10 +83,10 @@
           "pid": "0x1001"
         }
       },
-      "version": "1.29.0-38-gfd06458b60",
-      "date": "2026-09-15",
-      "url": "micropython-esp32-s3-octal-psram-v1.29.0-38-gfd06458b60.bin",
-      "md5": "852FAA55AFC6307DF7A5F706741FF6E4",
+      "version": "1.29.0-39-g14984d812b",
+      "date": "2026-09-16",
+      "url": "micropython-esp32-s3-octal-v1.29.0-39-g14984d812b.bin",
+      "md5": "C11D5622258B255FFA7AB8EEF8BF0D95",
       "size": 1822784,
       "update_fw_id": "GHIMPDG007",
       "address": 0,

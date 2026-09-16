@@ -162,11 +162,10 @@ async function pickFrom(
 
     const pick = await vscode.window.showQuickPick(
         items.map((b) => ({
-            // The id names the family; the second line lists the parts it
-            // covers, because one entry often serves several devices.
-            label: b.id,
+            // Show the human description as the main label; the technical id
+            // is internal and just clutters the picker for users.
+            label: b.deviceSupport,
             description: b.id === last ? "used last time" : undefined,
-            detail: b.deviceSupport,
             board: b,
         })),
         { title, placeHolder, ignoreFocusOut: true });

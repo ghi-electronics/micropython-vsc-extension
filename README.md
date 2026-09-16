@@ -85,7 +85,7 @@ You can also download the firmware and flash it yourself. Click on the desired b
 
 | Chip | Available Firmware |
 |---|---|
-| **RP2040** | [Raspberry Pi Pico][pico], [Adafruit QT Py RP2040][qtpy-rp2040] |
+| **RP2040** | [Raspberry Pi Pico][pico] |
 | **RP2350** | [Raspberry Pi Pico 2][pico2] |
 | **ESP32-S2** | [Adafruit QT Py ESP32-S2 and generic ESP32-S2 modules][esp32-s2] |
 | **ESP32-S3** | [ESP32-S3 N16R8 Development Board][esp32-s3-octal], [Seeed XIAO ESP32-S3][xiao-s3], [Hosyond ESP32-S3 Touchscreen Module (3.5″)][esp32-s3-octal] |
@@ -93,7 +93,6 @@ You can also download the firmware and flash it yourself. Click on the desired b
 
 [pico]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico-v1.29.0-35-g29b4eb3685.uf2
 [pico2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico2-v1.29.0-35-g29b4eb3685.uf2
-[qtpy-rp2040]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-qtpy-rp2040-v1.29.0-35-g29b4eb3685.uf2
 [esp32-s2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s2-v1.29.0-35-g29b4eb3685.bin
 [xiao-s3]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-xiao-esp32s3-v1.29.0-35-g29b4eb3685.bin
 [esp32-s3-octal]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-psram-v1.29.0-35-g29b4eb3685.bin
@@ -212,8 +211,8 @@ esptool.py --chip esp32s3 -p /dev/ttyACM0 --before default_reset --after hard_re
 
 Then tap **RESET** on the board and F5 in VS Code to start debugging.
 
-Raspberry Pi Pico, Pico 2, QT Py RP2040, and ESP32-S2 boards install normally
-through the extension on Linux -- only ESP32-S3 needs this manual step.
+Raspberry Pi Pico, Pico 2, and ESP32-S2 boards install normally through the
+extension on Linux -- only ESP32-S3 needs this manual step.
 
 ### ChromeOS
 
