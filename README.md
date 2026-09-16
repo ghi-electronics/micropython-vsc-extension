@@ -101,13 +101,12 @@ You can also download the firmware and flash it yourself. Click on the desired b
 
 | Command | What it does |
 |---|---|
+| MicroPython: New Project | Scaffolds an empty folder |
 | MicroPython: Update Device Firmware | Downloads the right firmware and installs it |
 | MicroPython: Flash Firmware from File… | Installs a firmware file you already have |
 | MicroPython: Open Device Shell (REPL) | Live program output; Ctrl-C stops the program for a `>>>` prompt |
-| MicroPython: Device Info | Firmware protocol version, limits, filesystem usage |
 | MicroPython: Erase Deployed Files | Removes deployed `.py` and `.mpy`, keeps `boot.py` |
-| MicroPython: New Project | Scaffolds an empty folder |
-| MicroPython: Select Device | Choose the port when more than one board is attached |
+
 
 **Ctrl+F5** runs without debugging: deploys and runs, `print()` still reaches the Debug
 Console, no breakpoints.
