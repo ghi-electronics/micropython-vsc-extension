@@ -76,6 +76,15 @@ export class MicroPythonDebugSession extends DebugSession {
      * see sourceFor().
      */
     private deployedLocal = new Map<string, string>();
+    /**
+     * True once launch is fully set up and any unexpected link close should be
+     * reported as a lost connection.  The launch itself closes and reopens the
+     * port around the reboot, and disconnect closes it deliberately; both
+     * would otherwise trigger a false "lost connection" alert.
+     */
+    private sessionLive = false;
+    /** Guard so a single disconnect does not stack up multiple modals. */
+    private lostConnectionShown = false;
 
     public constructor(
         private readonly context: vscode.ExtensionContext,
@@ -207,12 +216,42 @@ export class MicroPythonDebugSession extends DebugSession {
                 this.caps = undefined;
             }
 
+            // The port is open, the board answered capabilities, and the
+            // reconnect after reboot succeeded.  From here on, an unexpected
+            // close is a real disconnect worth alerting the user about.
+            this.sessionLive = true;
             this.sendResponse(response);
             // Only now does VS Code send setBreakpoints, then configurationDone.
             this.sendEvent(new InitializedEvent());
         } catch (err) {
+            // Every failure that reaches here is a connection problem: user
+            // cancellations return earlier, and everything past offerFirmwareUpdate
+            // touches the port.  Show a modal so a fresh F5 after an unplug does
+            // not fail silently -- the Debug Console line alone is too easy to miss.
+            this.showLostConnection();
             this.sendErrorResponse(response, 1001, (err as Error).message);
         }
+    }
+
+    /**
+     * Tell the user the board is no longer reachable.
+     *
+     * A single modal, guarded so a cascade of failures (close event, then a
+     * throw from the in-flight step, then a disconnect) does not stack up
+     * three copies of the same message.
+     */
+    private showLostConnection(): void {
+        if (this.lostConnectionShown) {
+            return;
+        }
+        this.lostConnectionShown = true;
+        void vscode.window.showErrorMessage(
+            "Lost connection to the board.",
+            {
+                modal: true,
+                detail: "Check the USB cable, then press F5 to try again.",
+            },
+            "OK");
     }
 
     /**
@@ -507,6 +546,18 @@ export class MicroPythonDebugSession extends DebugSession {
         this.link.removeAllListeners("stopped");
         this.link.removeAllListeners("error");
         this.link.on("error", (e: Error) => this.log(`device link: ${e.message}`));
+        this.link.removeAllListeners("close");
+        // The port going away mid-session -- USB unplugged, cable bad, board
+        // rebooted itself.  sessionLive gates this so the deliberate
+        // close-and-reopen around reboot does not trigger a false alert.
+        this.link.on("close", () => {
+            if (!this.sessionLive) {
+                return;
+            }
+            this.sessionLive = false;
+            this.showLostConnection();
+            this.sendEvent(new TerminatedEvent());
+        });
         this.link.removeAllListeners("output");
         // Program output arrives as its own event. "stdout" categorises it as
         // the program's, distinct from the adapter's own "console" messages.
@@ -515,6 +566,10 @@ export class MicroPythonDebugSession extends DebugSession {
         });
         this.link.on("stopped", (ev) => {
             if (ev.reason === StopReason.Exited) {
+                // Program finished normally.  Suppress the disconnect alert
+                // that would otherwise fire when VS Code tears the session
+                // down and the port closes.
+                this.sessionLive = false;
                 this.sendEvent(new TerminatedEvent());
                 return;
             }
@@ -958,6 +1013,7 @@ export class MicroPythonDebugSession extends DebugSession {
         // Terminate here means "stop debugging, leave the board running": the
         // program keeps going standalone, which is what an embedded target
         // should do when the debugger goes away.
+        this.sessionLive = false;
         await this.detach();
         this.sendResponse(response);
         this.sendEvent(new TerminatedEvent());
@@ -976,6 +1032,7 @@ export class MicroPythonDebugSession extends DebugSession {
     protected async disconnectRequest(
         response: DebugProtocol.DisconnectResponse,
     ): Promise<void> {
+        this.sessionLive = false;
         await this.detach();
         await this.link.close();
         this.sendResponse(response);
