@@ -4,7 +4,7 @@
   "families": [
     {
       "id": "RP2040",
-      "device_support": "RP2040 Generic \u2014 Raspberry Pi Pico, Pico W (no WiFi, no onboard LED)",
+      "device_support": "Raspberry Pi Pico, RP2040 Generic",
       "kind": "uf2-drive",
       "bootloader": {
         "boardId": "RPI-RP2"
@@ -19,7 +19,7 @@
     },
     {
       "id": "RP2350",
-      "device_support": "RP2350 Generic \u2014 Raspberry Pi Pico 2, Pico 2 W (no WiFi, no onboard LED)",
+      "device_support": "Raspberry Pi Pico 2, RP2350 Generic",
       "kind": "uf2-drive",
       "bootloader": {
         "boardId": "RP2350"
@@ -54,7 +54,7 @@
     },
     {
       "id": "ESP32_S3_GENERIC",
-      "device_support": "ESP32-S3 Generic (no PSRAM or Quad PSRAM) \u2014 includes Seeed XIAO ESP32-S3",
+      "device_support": "ESP32-S3 Generic (no PSRAM or Quad PSRAM)",
       "kind": "esp-rom",
       "bootloader": {
         "usb": {
@@ -75,7 +75,7 @@
     },
     {
       "id": "ESP32_S3_OCTAL",
-      "device_support": "ESP32-S3 with Octal PSRAM (N16R8V, N32R8V, or modules ending in \"V\")",
+      "device_support": "ESP32-S3 with Octal PSRAM",
       "kind": "esp-rom",
       "bootloader": {
         "usb": {
