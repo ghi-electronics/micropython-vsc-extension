@@ -91,6 +91,8 @@ Run `MicroPython: Update Device Firmware` in the Command Palette, pick the firmw
 | ESP32-S3 N16R8 Development Board | [ESP32_S3_OCTAL][fw-s3-octal] | 16 MB flash, 8 MB Octal PSRAM. |
 | Hosyond ESP32-S3 Touchscreen Module (3.5″) | [ESP32_S3_OCTAL][fw-s3-octal] | 16 MB flash, 8 MB Octal PSRAM; includes 3.5″ touchscreen. |
 
+> **Note.** A generic firmware boots on any board in the same chip family, so the debugger still works either way — breakpoints, step, print and deploy are unaffected. What changes is memory. Flash `ESP32_S3_GENERIC` onto an `ESP32-S3 N16R8 Development Board`, for example, and its 8 MB Octal PSRAM stays dark; the board then runs on the ESP32-S3's ~200 KB internal SRAM alone. Pick the firmware named in the row for your board to get the full memory it ships with.
+
 [fw-rp2040]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rp2040-generic-v1.29.0-39-g14984d812b.uf2
 
 [fw-rp2350]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rp2350-generic-v1.29.0-39-g14984d812b.uf2
