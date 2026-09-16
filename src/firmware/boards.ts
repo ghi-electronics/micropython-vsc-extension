@@ -166,38 +166,40 @@ export function manualFlashChoices(): BootBoard[] {
     return [
         {
             id: "RP2040",
-            deviceSupport: "Raspberry Pi Pico",
+            deviceSupport: "Raspberry Pi Pico, RP2040 Generic",
             kind: "uf2-drive",
             enterBootloader:
                 "Unplug the board, then plug the USB cable back in while holding BOOTSEL.",
         },
         {
             id: "RP2350",
-            deviceSupport: "Raspberry Pi Pico 2",
+            deviceSupport: "Raspberry Pi Pico 2, RP2350 Generic",
             kind: "uf2-drive",
             enterBootloader:
                 "Unplug the board, then plug the USB cable back in while holding BOOTSEL.",
         },
         {
-            id: "ESP32-S2",
-            deviceSupport: "Adafruit QT Py ESP32-S2, generic ESP32-S2 modules",
+            id: "ESP32_S2_GENERIC",
+            deviceSupport: "ESP32-S2 Generic with PSRAM or none",
             kind: "esp-rom",
             chip: "ESP32-S2",
             enterBootloader: "Hold BOOT, tap RESET, then release BOOT.",
         },
         {
-            id: "ESP32-S3",
-            deviceSupport: "Seeed XIAO ESP32-S3, generic ESP32-S3 with octal PSRAM (N8R8, N16R8)",
+            id: "ESP32_S3_GENERIC",
+            deviceSupport: "ESP32-S3 with Quad PSRAM or none",
             kind: "esp-rom",
             chip: "ESP32-S3",
             resetBefore: "usb_reset",
             enterBootloader: "Hold BOOT, tap RESET, then release BOOT.",
         },
         {
-            id: "SC13048",
-            deviceSupport: "GHI SITCore SC13xxx (SC13048, FEZ Flea)",
-            kind: "ghi-loader",
-            enterBootloader: "Hold LDR, tap RESET, then release LDR.",
+            id: "ESP32_S3_OCTAL",
+            deviceSupport: "ESP32-S3 with Octal PSRAM",
+            kind: "esp-rom",
+            chip: "ESP32-S3",
+            resetBefore: "usb_reset",
+            enterBootloader: "Hold BOOT, tap RESET, then release BOOT.",
         },
     ];
 }

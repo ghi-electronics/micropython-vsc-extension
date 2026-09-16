@@ -63,6 +63,18 @@
         "title": "MicroPython: Flash Firmware from File..."
       }
     ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "micropython-debugger.selectDevice",
+          "when": "false"
+        },
+        {
+          "command": "micropython-debugger.deviceInfo",
+          "when": "false"
+        }
+      ]
+    },
     "configuration": {
       "title": "MicroPython",
       "properties": {

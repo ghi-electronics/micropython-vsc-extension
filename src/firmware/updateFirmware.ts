@@ -162,10 +162,9 @@ async function pickFrom(
 
     const pick = await vscode.window.showQuickPick(
         items.map((b) => ({
-            // Show the human description as the main label; the technical id
-            // is internal and just clutters the picker for users.
-            label: b.deviceSupport,
+            label: b.id,
             description: b.id === last ? "used last time" : undefined,
+            detail: b.deviceSupport,
             board: b,
         })),
         { title, placeHolder, ignoreFocusOut: true });

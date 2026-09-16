@@ -139,14 +139,14 @@ async function openShell(): Promise<void> {
  */
 async function withDevice<T>(fn: (link: DeviceLink) => Promise<T>): Promise<T | undefined> {
     const ports = await findPorts();
-    let debugPort = ports.debug;
+    const debugPort = ports.debug;
     if (!debugPort) {
-        debugPort = await offerFirmwareInstall();
-    }
-    if (!debugPort) {
-        // The install offer above has already had the conversation: the user
-        // declined, or the updater reported its own failure.  Adding an error
-        // here would be answering "no" with a complaint.
+        // No board to talk to.  Offer to install debugger firmware; either
+        // way (installed or declined) this command ends here -- the
+        // installer runs on its own and the user re-invokes the command
+        // once the "ready to debug" prompt appears.  Adding an error here
+        // would be answering "no" with a complaint.
+        await offerFirmwareInstall();
         return undefined;
     }
     const link = new DeviceLink();
@@ -269,9 +269,9 @@ const SAMPLE_LAUNCH = `{
             "type": "micropython",
             "request": "launch",
             "name": "MicroPython Deploy and Debug (USB)",
-            // Uncomment and set when auto-detect picks the wrong port
-            // (ChromeOS, or more than one board on the same machine):
-            // "debugPort": "/dev/ttyACM1",
+            // Uncomment and set when auto-detect fails
+            // ChromeOS, custom firmware, or more than one board on the same machine
+            // "debugPort": "/dev/ttyACM1", // "COMx" on Windows
             "program": "\${workspaceFolder}/main.py",
             "sync": true,
             "stopOnEntry": false,

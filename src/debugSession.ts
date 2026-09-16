@@ -138,21 +138,15 @@ export class MicroPythonDebugSession extends DebugSession {
             // debugPort is the current field; args.device is kept as a fallback
             // so a launch.json written before the rename still works.
             const overridePort = args.debugPort || args.device;
-            let devicePort = overridePort || ports.debug;
+            const devicePort = overridePort || ports.debug;
             if (!devicePort) {
                 // The commonest first experience: the extension is new, the
                 // board is running whatever it shipped with, and F5 has just
-                // been pressed.  Offer to fix it rather than explaining why it
-                // cannot work -- and if the user accepts, carry on with the
-                // session they actually asked for.
-                devicePort = await offerFirmwareInstall();
-            }
-            if (!devicePort) {
-                // The offer above is the last thing that happens here, and by
-                // now the user has already had their say: they declined, or the
-                // updater reported its own failure.  Raising an error on top of
-                // that answers "no" with a complaint -- so the session simply
-                // ends, with nothing further to dismiss.
+                // been pressed.  Offer to fix it rather than explaining why
+                // it cannot work.  Either way (installed or declined) F5 ends
+                // here -- the installer runs on its own and the user
+                // re-presses F5 on the settled firmware.
+                await offerFirmwareInstall();
                 this.sendResponse(response);
                 this.sendEvent(new TerminatedEvent());
                 return;
