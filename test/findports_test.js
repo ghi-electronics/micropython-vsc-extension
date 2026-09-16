@@ -23,17 +23,20 @@ Module._load = function (request, parent, isMain) {
 
 const { findPorts } = require("../out/deviceLink");
 
-const VID = "1b9f";
-const PID = "f105";
+// Any VID/PID from KNOWN_DEVICES works -- these are the RP2040/RP2350 ids.
+// The test exercises how findPorts distinguishes the two CDCs, not which board
+// the identity belongs to.
+const VID = "2e8a";
+const PID = "0005";
 
 const CASES = [
     {
         name: "Windows: interface number in the device instance path",
         ports: [
             { path: "COM3", vendorId: VID, productId: PID,
-                pnpId: "USB\\VID_1B9F&PID_F105&MI_00\\6&1A2B3C&0&0000" },
+                pnpId: "USB\\VID_2E8A&PID_0005&MI_00\\6&1A2B3C&0&0000" },
             { path: "COM4", vendorId: VID, productId: PID,
-                pnpId: "USB\\VID_1B9F&PID_F105&MI_02\\6&1A2B3C&0&0002" },
+                pnpId: "USB\\VID_2E8A&PID_0005&MI_02\\6&1A2B3C&0&0002" },
         ],
         expect: { repl: "COM3", debug: "COM4" },
     },

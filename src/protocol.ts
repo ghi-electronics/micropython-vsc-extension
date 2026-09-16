@@ -113,10 +113,6 @@ export const FILE_ERR_BAD_REQUEST = -3;
  */
 export const MAX_PAYLOAD = 512;
 
-/** USB identity of a SITCore board running this firmware, in VCP+VCP mode. */
-export const USB_VID = 0x1b9f;
-export const USB_PID_CDC2 = 0xf105;
-
 /**
  * Boards we know how to talk to.
  *
@@ -134,7 +130,6 @@ export const USB_PID_CDC2 = 0xf105;
  */
 export interface KnownDevice { vid: number; pid: number; name: string; }
 export const KNOWN_DEVICES: KnownDevice[] = [
-    { vid: 0x1b9f, pid: 0xf105, name: "SITCore SC13xxx" },
     { vid: 0x2e8a, pid: 0x0005, name: "Raspberry Pi Pico / Pico 2" },
     // esp32 computes its PID from a CFG_TUD_* bitmap, so two CDCs yields 0x4002
     // where stock (one CDC) is 0x4001 -- a distinct identity for free.
