@@ -77,25 +77,29 @@ newer release and offers to install it.
 
 ## Supported hardware
 
-MicroPython debug support is compiled and tested on some boards for you. 
+MicroPython debug support is compiled and tested on the boards below.
 
-Run `MicroPython: Update Device Firmware` in the Command Palette, pick your board, and follow the instructions.
+Run `MicroPython: Update Device Firmware` in the Command Palette, pick the firmware for your board, and follow the instructions.
 
-You can also download the firmware and flash it yourself. Click on the desired board in the table below to download the firmware.
+| Tested Board | Firmware Used | Note |
+|---|---|---|
+| Raspberry Pi Pico | [RP2040][fw-rp2040] | |
+| Adafruit QT Py RP2040 | [RP2040][fw-rp2040] | 8 MB flash on-board; generic firmware uses the first 2 MB. |
+| Raspberry Pi Pico 2 | [RP2350][fw-rp2350] | |
+| Adafruit QT Py ESP32-S2 | [ESP32_S2_GENERIC][fw-s2] | |
+| Seeed XIAO ESP32-S3 | [ESP32_S3_GENERIC][fw-s3-generic] | No PSRAM on this board. |
+| ESP32-S3 N16R8 Development Board | [ESP32_S3_OCTAL][fw-s3-octal] | 16 MB flash, 8 MB Octal PSRAM. |
+| Hosyond ESP32-S3 Touchscreen Module (3.5″) | [ESP32_S3_OCTAL][fw-s3-octal] | 16 MB flash, 8 MB Octal PSRAM; includes 3.5″ touchscreen. |
 
-| Chip | Available Firmware |
-|---|---|
-| **RP2040** | [Raspberry Pi Pico][pico] |
-| **RP2350** | [Raspberry Pi Pico 2][pico2] |
-| **ESP32-S2** | [Adafruit QT Py ESP32-S2 and generic ESP32-S2 modules][esp32-s2] |
-| **ESP32-S3** | [ESP32-S3 N16R8 Development Board][esp32-s3-octal], [Seeed XIAO ESP32-S3][xiao-s3], [Hosyond ESP32-S3 Touchscreen Module (3.5″)][esp32-s3-octal] |
+[fw-rp2040]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rp2040-generic-v1.29.0-39-g14984d812b.uf2
 
+[fw-rp2350]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rp2350-generic-v1.29.0-39-g14984d812b.uf2
 
-[pico]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico-v1.29.0-35-g29b4eb3685.uf2
-[pico2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rpi-pico2-v1.29.0-35-g29b4eb3685.uf2
-[esp32-s2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s2-v1.29.0-35-g29b4eb3685.bin
-[xiao-s3]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-xiao-esp32s3-v1.29.0-35-g29b4eb3685.bin
-[esp32-s3-octal]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-psram-v1.29.0-35-g29b4eb3685.bin
+[fw-s2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s2-generic-v1.29.0-39-g14984d812b.bin
+
+[fw-s3-generic]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-generic-v1.29.0-39-g14984d812b.bin
+
+[fw-s3-octal]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-v1.29.0-39-g14984d812b.bin
 
 ## Commands
 
