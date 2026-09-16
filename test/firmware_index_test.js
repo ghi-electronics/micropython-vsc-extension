@@ -56,8 +56,8 @@ function check(name, ok, detail) {
 // --- which boards a bootloader could be ------------------------------------
 {
     const rp2040 = boards.familyForBoardId("RPI-RP2");
-    check("RP2040 is ambiguous, so more than one candidate",
-        rp2040 && rp2040.boards.length > 1,
+    check("RP2040 resolves to the Pico entry",
+        rp2040 && rp2040.boards.length === 1 && rp2040.boards[0].id === "RPI_PICO",
         rp2040 ? rp2040.boards.map((b) => b.id).join(", ") : "no family");
 
     const rp2350 = boards.familyForBoardId("RP2350");
