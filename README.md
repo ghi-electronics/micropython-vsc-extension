@@ -55,9 +55,8 @@ Existing project:
 
 ## Firmware updates
 
-Your board is kept in step with the latest release from
-[GHI Electronics](https://www.ghielectronics.com), helping you stay up to date with fixes
-and new features.
+Your board is kept in step with the latest release from GHI Electronics,
+helping you stay up to date with fixes and new features.
 
 **First-time install.** On F5 with a board running stock MicroPython (or nothing yet), the
 extension offers to install the debugger firmware. Click **Install**, follow the
