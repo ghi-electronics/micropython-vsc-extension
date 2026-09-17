@@ -3,7 +3,7 @@
   "displayName": "MicroPython Debugger",
   "version": "0.2.0",
   "description": "Source-level MicroPython debugging over USB.",
-  "publisher": "GHI-Electronics",
+  "publisher": "ghielectronics",
   "license": "MIT",
   "homepage": "https://www.ghielectronics.com",
   "bugs": {
