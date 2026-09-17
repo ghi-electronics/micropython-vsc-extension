@@ -10,7 +10,7 @@
  */
 
 /** 7 characters plus NUL, stuffed into 8 bytes. */
-export const MARKER = Buffer.from("GHIPKT1\0", "binary");
+export const MARKER = Buffer.from("MPYDBG1\0", "binary");
 export const HEADER_SIZE = 32;
 
 /** WP_Flags */
