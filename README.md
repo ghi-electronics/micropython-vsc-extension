@@ -94,7 +94,6 @@ MicroPython debug support is compiled and tested on the boards below.
 | Tested Board | Firmware Used | Note |
 |---|---|---|
 | Raspberry Pi Pico | RP2040 | |
-| Adafruit QT Py RP2040 | RP2040 | 8 MB flash on-board; generic firmware uses the first 2 MB. |
 | Raspberry Pi Pico 2 | RP2350 | |
 | Adafruit QT Py ESP32-S2 | ESP32_S2_GENERIC | |
 | Seeed XIAO ESP32-S3 | ESP32_S3_GENERIC | No PSRAM on this board. |
