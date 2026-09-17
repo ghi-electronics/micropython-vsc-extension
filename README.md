@@ -65,8 +65,9 @@ instruction steps to install firmware into the device.
 
 <img src="images/update_fw_prompt_get_started.png" alt="Prompt offering to install the debugger firmware" width="480" />
 
-**Later updates.** Once the debugger firmware is on your board, F5 checks for a
-newer release and offers to install it.
+**Later updates.** Once the debugger firmware is on your board, F5 checks GHI's
+public [firmware index on GitHub](https://github.com/ghi-electronics/micropython-vsc-extension/tree/main/docs/firmware)
+for a newer release and offers to install it. 
 
 <img src="images/update_fw_prompt.png" alt="Firmware update prompt with Update, Don't ask again and Not now buttons" width="480" />
 
