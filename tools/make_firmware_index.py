@@ -60,7 +60,7 @@ BOARDS = [
         "enterBootloader": "Unplug the board, then plug the USB cable back in "
                            "while holding BOOTSEL.",
         "update_fw_id": "GHIMPDG002",
-        "artifact": "ports/rp2/build-RPI_PICO-GHIMPDG/firmware.uf2",
+        "artifact": "ports/rp2/build-GHI_RPI_PICO/firmware.uf2",
         "publish": "micropython-rp2040-generic-v{version}.uf2",
     },
     {
@@ -73,7 +73,7 @@ BOARDS = [
         "enterBootloader": "Unplug the board, then plug the USB cable back in "
                            "while holding BOOTSEL.",
         "update_fw_id": "GHIMPDG003",
-        "artifact": "ports/rp2/build-RPI_PICO2-GHIMPDG/firmware.uf2",
+        "artifact": "ports/rp2/build-GHI_RPI_PICO2/firmware.uf2",
         "publish": "micropython-rp2350-generic-v{version}.uf2",
     },
     {
@@ -89,7 +89,7 @@ BOARDS = [
         "chip": "ESP32-S2",
         "address": 0,
         "update_fw_id": "GHIMPDG005",
-        "esp_build": "ports/esp32/build-ESP32_GENERIC_S2-GHIMPDG",
+        "esp_build": "ports/esp32/build-GHI_ESP32_GENERIC_S2",
         "publish": "micropython-esp32-s2-generic-v{version}.bin",
     },
     {
@@ -110,7 +110,7 @@ BOARDS = [
         "resetBefore": "usb_reset",
         "address": 0,
         "update_fw_id": "GHIMPDG006",
-        "esp_build": "ports/esp32/build-ESP32_GENERIC_S3-GHIMPDG",
+        "esp_build": "ports/esp32/build-GHI_ESP32_GENERIC_S3",
         "publish": "micropython-esp32-s3-generic-v{version}.bin",
     },
     {
@@ -127,7 +127,7 @@ BOARDS = [
         "resetBefore": "usb_reset",
         "address": 0,
         "update_fw_id": "GHIMPDG007",
-        "esp_build": "ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT",
+        "esp_build": "ports/esp32/build-GHI_ESP32_S3_OCTAL",
         "publish": "micropython-esp32-s3-octal-v{version}.bin",
     },
 ]

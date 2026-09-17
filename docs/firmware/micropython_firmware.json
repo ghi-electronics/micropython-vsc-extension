@@ -9,10 +9,10 @@
       "bootloader": {
         "boardId": "RPI-RP2"
       },
-      "version": "1.29.0-39-g14984d812b",
-      "date": "2026-09-16",
-      "url": "micropython-rp2040-generic-v1.29.0-39-g14984d812b.uf2",
-      "md5": "400278F4AFD6E8EFA3A3B9F8B14E209B",
+      "version": "1.29.0-45-g0a94a1af45",
+      "date": "2026-09-17",
+      "url": "micropython-rp2040-generic-v1.29.0-45-g0a94a1af45.uf2",
+      "md5": "4788E56C42D9B5B1433517216EE59C19",
       "size": 732160,
       "update_fw_id": "GHIMPDG002",
       "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
@@ -24,10 +24,10 @@
       "bootloader": {
         "boardId": "RP2350"
       },
-      "version": "1.29.0-39-g14984d812b",
-      "date": "2026-09-16",
-      "url": "micropython-rp2350-generic-v1.29.0-39-g14984d812b.uf2",
-      "md5": "5D657D2269F5A5D6B6B8D169A27BFB3E",
+      "version": "1.29.0-45-g0a94a1af45",
+      "date": "2026-09-17",
+      "url": "micropython-rp2350-generic-v1.29.0-45-g0a94a1af45.uf2",
+      "md5": "EE34749633E51C322DD78DCBCA7C6C30",
       "size": 710656,
       "update_fw_id": "GHIMPDG003",
       "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
@@ -42,10 +42,10 @@
           "pid": "0x0002"
         }
       },
-      "version": "1.29.0-39-g14984d812b",
-      "date": "2026-09-16",
-      "url": "micropython-esp32-s2-generic-v1.29.0-39-g14984d812b.bin",
-      "md5": "375CED5E2CAECA50EFF114CCE2730E10",
+      "version": "1.29.0-45-g0a94a1af45",
+      "date": "2026-09-17",
+      "url": "micropython-esp32-s2-generic-v1.29.0-45-g0a94a1af45.bin",
+      "md5": "27C03783F2E496836EE5A5408BE1ECF9",
       "size": 1575072,
       "update_fw_id": "GHIMPDG005",
       "address": 0,
@@ -62,11 +62,11 @@
           "pid": "0x1001"
         }
       },
-      "version": "1.29.0-39-g14984d812b",
-      "date": "2026-09-16",
-      "url": "micropython-esp32-s3-generic-v1.29.0-39-g14984d812b.bin",
-      "md5": "C497CAD7AD0F71635D155F7FCC99659A",
-      "size": 1819392,
+      "version": "1.29.0-45-g0a94a1af45",
+      "date": "2026-09-17",
+      "url": "micropython-esp32-s3-generic-v1.29.0-45-g0a94a1af45.bin",
+      "md5": "DF9EC860A9E6B37661E290CADF79C53D",
+      "size": 1819376,
       "update_fw_id": "GHIMPDG006",
       "address": 0,
       "chip": "ESP32-S3",
@@ -83,10 +83,10 @@
           "pid": "0x1001"
         }
       },
-      "version": "1.29.0-39-g14984d812b",
-      "date": "2026-09-16",
-      "url": "micropython-esp32-s3-octal-v1.29.0-39-g14984d812b.bin",
-      "md5": "C11D5622258B255FFA7AB8EEF8BF0D95",
+      "version": "1.29.0-45-g0a94a1af45",
+      "date": "2026-09-17",
+      "url": "micropython-esp32-s3-octal-v1.29.0-45-g0a94a1af45.bin",
+      "md5": "83F07B442704B4813B8FFD60AAC60956",
       "size": 1822784,
       "update_fw_id": "GHIMPDG007",
       "address": 0,
