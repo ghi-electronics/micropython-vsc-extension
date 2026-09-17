@@ -103,7 +103,7 @@ MicroPython debug support is compiled and tested on the boards below.
 
 ### Build firmware for your own board
 
-Not in the list, or want to tune the build for your exact hardware (flash size, PSRAM mode, pin map)? Build the firmware from source — the [MicroPython fork with the debugger integration](https://github.com/ghi-electronics/micropython-fw-debugger) has the prerequisites, the board-config settings the debugger needs, and per-port notes.
+Not in the list, or want to tune the build for your exact hardware (flash size, PSRAM mode, pin map)? Build the firmware from source — the [MicroPython fork with the debugger integration](https://github.com/ghi-electronics/micropython-firmware-debugger) has the prerequisites, the board-config settings the debugger needs, and per-port notes.
 
 [fw-rp2040]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rp2040-generic-latest.uf2
 
