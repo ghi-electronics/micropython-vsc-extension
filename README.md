@@ -97,15 +97,15 @@ Run `MicroPython: Update Device Firmware` in the Command Palette, pick the firmw
 
 Not in the list, or want to tune the build for your exact hardware (flash size, PSRAM mode, pin map)? Build the firmware from source — the [MicroPython fork with the debugger integration](https://github.com/ghi-electronics/micropython-fw-debugger) has the prerequisites, the board-config settings the debugger needs, and per-port notes.
 
-[fw-rp2040]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rp2040-generic-v1.29.0-39-g14984d812b.uf2
+[fw-rp2040]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rp2040-generic-latest.uf2
 
-[fw-rp2350]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rp2350-generic-v1.29.0-39-g14984d812b.uf2
+[fw-rp2350]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-rp2350-generic-latest.uf2
 
-[fw-s2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s2-generic-v1.29.0-39-g14984d812b.bin
+[fw-s2]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s2-generic-latest.bin
 
-[fw-s3-generic]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-generic-v1.29.0-39-g14984d812b.bin
+[fw-s3-generic]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-generic-latest.bin
 
-[fw-s3-octal]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-v1.29.0-39-g14984d812b.bin
+[fw-s3-octal]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-latest.bin
 
 ## Commands
 
@@ -203,10 +203,10 @@ boards on Linux (see Known limits). Install from the terminal instead:
 pip install esptool
 
 # 2. Download the current firmware for your board.
-#    XIAO ESP32-S3:
-wget https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-xiao-esp32s3-v1.29.0-35-g29b4eb3685.bin
-#    Generic ESP32-S3 with 8 MB octal PSRAM (N8R8, N16R8):
-# wget https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-psram-v1.29.0-35-g29b4eb3685.bin
+#    ESP32-S3 with no PSRAM or Quad PSRAM (e.g. Seeed XIAO ESP32-S3):
+wget https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-generic-latest.bin
+#    ESP32-S3 with Octal PSRAM (N16R8V, N32R8V, or modules ending in "V"):
+# wget https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-latest.bin
 
 # 3. Put the board in BOOT mode (hold BOOT, tap RESET, release BOOT),
 #    confirm which port it appeared as (typically /dev/ttyACM0):
@@ -215,7 +215,7 @@ ls /dev/ttyACM*
 # 4. Flash it -- adjust the port and the filename to match steps 2 and 3.
 esptool.py --chip esp32s3 -p /dev/ttyACM0 --before default_reset --after hard_reset \
     write_flash --flash_mode dio --flash_size keep --flash_freq 80m \
-    0x0 micropython-xiao-esp32s3-v1.29.0-35-g29b4eb3685.bin
+    0x0 micropython-esp32-s3-generic-latest.bin
 ```
 
 Then tap **RESET** on the board and F5 in VS Code to start debugging.

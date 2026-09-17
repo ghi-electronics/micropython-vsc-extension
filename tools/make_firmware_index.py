@@ -25,8 +25,25 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
+
+
+def _latest_alias_name(published_name):
+    """Return the "always latest" alias filename for a versioned published one.
+
+    e.g. "micropython-rp2040-generic-v1.29.0-45-g0a94a1af45.uf2"
+      -> "micropython-rp2040-generic-latest.uf2".
+
+    The alias exists so the extension's README can link to a stable URL that
+    never dies across releases and never picks up a stale MicroPython base
+    version.  Each publish overwrites the -latest file with the current
+    build; the versioned file (used by the manifest for the F5 update
+    check) stays alongside for future rollback.
+    """
+    # Match the whole `-v<base>[-<count>-g<hash>]` chunk and swap for `-latest`.
+    return re.sub(r"-v[\d.]+(-\d+-g[0-9a-f]+)?", "-latest", published_name)
 
 # URLs in the index are bare filenames. They resolve relative to the JSON's
 # location, which is `docs/firmware/micropython_firmware.json` on the raw
@@ -54,7 +71,7 @@ BOARDS = [
         # flash only the first 2 MB is used -- RP2040 MicroPython does not
         # dynamically size the filesystem.
         "id": "RP2040",
-        "device_support": "RP2040 Generic — Raspberry Pi Pico, Pico W (no WiFi, no onboard LED)",
+        "device_support": "Raspberry Pi Pico, RP2040 Generic",
         "kind": "uf2-drive",
         "bootloader": {"boardId": "RPI-RP2"},
         "enterBootloader": "Unplug the board, then plug the USB cable back in "
@@ -67,7 +84,7 @@ BOARDS = [
         # RP2350 generic build: Pico 2, Pico 2 W (no WiFi and no onboard LED
         # on the W), and any other RP2350 board with >= 4 MB flash.
         "id": "RP2350",
-        "device_support": "RP2350 Generic — Raspberry Pi Pico 2, Pico 2 W (no WiFi, no onboard LED)",
+        "device_support": "Raspberry Pi Pico 2, RP2350 Generic",
         "kind": "uf2-drive",
         "bootloader": {"boardId": "RP2350"},
         "enterBootloader": "Unplug the board, then plug the USB cable back in "
@@ -82,7 +99,7 @@ BOARDS = [
         # cleanly on both PSRAM and no-PSRAM S2 modules.  Flash size >= 4 MB
         # is auto-detected at boot; the vfs partition takes whatever is left.
         "id": "ESP32_S2_GENERIC",
-        "device_support": "ESP32-S2 Generic (with or without PSRAM)",
+        "device_support": "ESP32-S2 Generic with PSRAM or none",
         "kind": "esp-rom",
         "bootloader": {"usb": {"vid": "0x303A", "pid": "0x0002"}},
         "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
@@ -102,7 +119,7 @@ BOARDS = [
         # Does NOT boot correctly on Octal-PSRAM boards (N8R8-octal, N16R8V,
         # N32R8V) -- for those, use ESP32_S3_OCTAL.
         "id": "ESP32_S3_GENERIC",
-        "device_support": "ESP32-S3 Generic (no PSRAM or Quad PSRAM) — includes Seeed XIAO ESP32-S3",
+        "device_support": "ESP32-S3 with Quad PSRAM or none",
         "kind": "esp-rom",
         "bootloader": {"usb": {"vid": "0x303A", "pid": "0x1001"}},
         "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
@@ -119,7 +136,7 @@ BOARDS = [
         # any board where the module label ends in "V" (indicating 1.8 V
         # PSRAM, which is Espressif's convention for Octal parts).
         "id": "ESP32_S3_OCTAL",
-        "device_support": "ESP32-S3 with Octal PSRAM (N16R8V, N32R8V, or modules ending in \"V\")",
+        "device_support": "ESP32-S3 with Octal PSRAM",
         "kind": "esp-rom",
         "bootloader": {"usb": {"vid": "0x303A", "pid": "0x1001"}},
         "enterBootloader": "Hold BOOT, tap RESET, then release BOOT.",
@@ -282,7 +299,9 @@ def main():
         if "enterBootloader" in board:
             entry["enterBootloader"] = board["enterBootloader"]
         families.append(entry)
-        to_publish.append((path, os.path.basename(entry["url"])))
+        published_name = os.path.basename(entry["url"])
+        latest_name = _latest_alias_name(published_name)
+        to_publish.append((path, published_name, latest_name))
 
         print("  %-24s %8d bytes  %s" % (board["id"], len(data), entry["md5"]))
         print("  %-24s %s" % ("", os.path.basename(entry["url"])))
@@ -314,7 +333,7 @@ def main():
             sys.exit("--publish-to: %s is not a directory" % dest)
 
         print("\npublishing to %s" % dest)
-        for src, name in to_publish:
+        for src, name, latest_name in to_publish:
             target = os.path.join(dest, name)
             shutil.copyfile(src, target)
             # Re-hash what actually landed: a copy that silently truncated would
@@ -328,6 +347,14 @@ def main():
             print("  %-56s %s" % (name, status))
             if got != want:
                 sys.exit("copy of %s does not match its index entry" % name)
+
+            # Also copy to the "-lt" alias so the README can link to a stable
+            # URL that survives version bumps.  Overwrites any previous alias
+            # from an earlier release; the versioned copy above is what the
+            # manifest points at for the F5 update check.
+            latest_target = os.path.join(dest, latest_name)
+            shutil.copyfile(target, latest_target)
+            print("  %-56s ok (alias)" % latest_name)
 
         index_name = os.path.basename(args.out)
         shutil.copyfile(args.out, os.path.join(dest, index_name))
