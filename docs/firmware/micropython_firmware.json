@@ -9,10 +9,10 @@
       "bootloader": {
         "boardId": "RPI-RP2"
       },
-      "version": "1.29.0-45-g0a94a1af45",
+      "version": "1.29.0-3-g8d67a63196",
       "date": "2026-09-17",
-      "url": "micropython-rp2040-generic-v1.29.0-45-g0a94a1af45.uf2",
-      "md5": "4788E56C42D9B5B1433517216EE59C19",
+      "url": "micropython-rp2040-generic-v1.29.0-3-g8d67a63196.uf2",
+      "md5": "64294F3149071BE33325B68DAE1B0281",
       "size": 732160,
       "update_fw_id": "GHIMPDG002",
       "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
@@ -24,10 +24,10 @@
       "bootloader": {
         "boardId": "RP2350"
       },
-      "version": "1.29.0-45-g0a94a1af45",
+      "version": "1.29.0-3-g8d67a63196",
       "date": "2026-09-17",
-      "url": "micropython-rp2350-generic-v1.29.0-45-g0a94a1af45.uf2",
-      "md5": "EE34749633E51C322DD78DCBCA7C6C30",
+      "url": "micropython-rp2350-generic-v1.29.0-3-g8d67a63196.uf2",
+      "md5": "D317F58CC3C98F411EABD06A4A57D5DC",
       "size": 710656,
       "update_fw_id": "GHIMPDG003",
       "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
@@ -42,10 +42,10 @@
           "pid": "0x0002"
         }
       },
-      "version": "1.29.0-45-g0a94a1af45",
+      "version": "1.29.0-3-g8d67a63196",
       "date": "2026-09-17",
-      "url": "micropython-esp32-s2-generic-v1.29.0-45-g0a94a1af45.bin",
-      "md5": "27C03783F2E496836EE5A5408BE1ECF9",
+      "url": "micropython-esp32-s2-generic-v1.29.0-3-g8d67a63196.bin",
+      "md5": "EEBAB3D325FB4A50E212521DC0E1C2B5",
       "size": 1575072,
       "update_fw_id": "GHIMPDG005",
       "address": 0,
@@ -62,10 +62,10 @@
           "pid": "0x1001"
         }
       },
-      "version": "1.29.0-45-g0a94a1af45",
+      "version": "1.29.0-3-g8d67a63196",
       "date": "2026-09-17",
-      "url": "micropython-esp32-s3-generic-v1.29.0-45-g0a94a1af45.bin",
-      "md5": "DF9EC860A9E6B37661E290CADF79C53D",
+      "url": "micropython-esp32-s3-generic-v1.29.0-3-g8d67a63196.bin",
+      "md5": "B7531D8CBC837FFBB7505DFCBC93C677",
       "size": 1819376,
       "update_fw_id": "GHIMPDG006",
       "address": 0,
@@ -83,11 +83,11 @@
           "pid": "0x1001"
         }
       },
-      "version": "1.29.0-45-g0a94a1af45",
+      "version": "1.29.0-3-g8d67a63196",
       "date": "2026-09-17",
-      "url": "micropython-esp32-s3-octal-v1.29.0-45-g0a94a1af45.bin",
-      "md5": "83F07B442704B4813B8FFD60AAC60956",
-      "size": 1822784,
+      "url": "micropython-esp32-s3-octal-v1.29.0-3-g8d67a63196.bin",
+      "md5": "4C853456ABE324B6A53E14333DAB54B2",
+      "size": 1822768,
       "update_fw_id": "GHIMPDG007",
       "address": 0,
       "chip": "ESP32-S3",
