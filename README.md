@@ -77,21 +77,29 @@ for a newer release and offers to install it.
 
 ## Supported hardware
 
-MicroPython debug support is compiled and tested on the boards below.
+We ship five firmware builds — between them, they bring the debugger to most popular MicroPython boards today.
+
+| Available firmware | Note |
+|---|---|
+| [RP2040][fw-rp2040] | For Raspberry Pi Pico and other RP2040 boards. Uses the first 2 MB of flash. Also runs on Pico W (no wireless). |
+| [RP2350][fw-rp2350] | For Raspberry Pi Pico 2 and other RP2350 boards. Also runs on Pico 2 W (no wireless). |
+| [ESP32_S2_GENERIC][fw-s2] | For ESP32-S2 modules, with or without PSRAM. |
+| [ESP32_S3_GENERIC][fw-s3-generic] | For ESP32-S3 modules with no PSRAM or Quad PSRAM. Flash and PSRAM are detected automatically. |
+| [ESP32_S3_OCTAL][fw-s3-octal] | For ESP32-S3 modules with Octal PSRAM. Flash and PSRAM are detected automatically. |
 
 Run `MicroPython: Update Device Firmware` in the Command Palette, pick the firmware for your board, and follow the instructions.
 
+MicroPython debug support is compiled and tested on the boards below.
+
 | Tested Board | Firmware Used | Note |
 |---|---|---|
-| Raspberry Pi Pico | [RP2040][fw-rp2040] | |
-| Adafruit QT Py RP2040 | [RP2040][fw-rp2040] | 8 MB flash on-board; generic firmware uses the first 2 MB. |
-| Raspberry Pi Pico 2 | [RP2350][fw-rp2350] | |
-| Adafruit QT Py ESP32-S2 | [ESP32_S2_GENERIC][fw-s2] | |
-| Seeed XIAO ESP32-S3 | [ESP32_S3_GENERIC][fw-s3-generic] | No PSRAM on this board. |
-| ESP32-S3 N16R8 Development Board | [ESP32_S3_OCTAL][fw-s3-octal] | 16 MB flash, 8 MB Octal PSRAM. |
-| Hosyond ESP32-S3 Touchscreen Module (3.5″) | [ESP32_S3_OCTAL][fw-s3-octal] | 16 MB flash, 8 MB Octal PSRAM; includes 3.5″ touchscreen. |
-
-> **Note.** A generic firmware boots on any board in the same chip family, so the debugger still works either way — breakpoints, step, print and deploy are unaffected. What changes is memory. Flash `ESP32_S3_GENERIC` onto an `ESP32-S3 N16R8 Development Board`, for example, and its 8 MB Octal PSRAM stays dark; the board then runs on the ESP32-S3's ~200 KB internal SRAM alone. Pick the firmware named in the row for your board to get the full memory it ships with.
+| Raspberry Pi Pico | RP2040 | |
+| Adafruit QT Py RP2040 | RP2040 | 8 MB flash on-board; generic firmware uses the first 2 MB. |
+| Raspberry Pi Pico 2 | RP2350 | |
+| Adafruit QT Py ESP32-S2 | ESP32_S2_GENERIC | |
+| Seeed XIAO ESP32-S3 | ESP32_S3_GENERIC | No PSRAM on this board. |
+| ESP32-S3 N16R8 Development Board | ESP32_S3_OCTAL | 16 MB flash, 8 MB Octal PSRAM. |
+| Hosyond ESP32-S3 Touchscreen Module (3.5″) | ESP32_S3_OCTAL | 16 MB flash, 8 MB Octal PSRAM; includes 3.5″ touchscreen. |
 
 ### Build firmware for your own board
 
