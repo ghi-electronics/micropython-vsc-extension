@@ -1,7 +1,7 @@
 {
   "name": "micropython-debugger",
   "displayName": "MicroPython Debugger",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Source-level MicroPython debugging over USB.",
   "publisher": "ghielectronics",
   "license": "MIT",
