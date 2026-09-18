@@ -4,7 +4,7 @@
 
 Set a breakpoint in the gutter. Press F5. Your code deploys, the board restarts, and
 execution stops on that line — with the call stack, your variables, and a working
-Watch window. No JTAG, no debug probe, no wiring.
+Watch window. No JTAG, no debug probe, no wiring. ▶️ [Quick tutorial on YouTube](https://www.youtube.com/watch?v=ED_czSX65UI)
 
 ![MicroPython Debugger Servo](images/servo.gif)
 
