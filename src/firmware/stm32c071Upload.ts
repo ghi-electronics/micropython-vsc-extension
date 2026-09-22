@@ -2,23 +2,45 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * Upload a compiled .mpy to a GHI STM32C071 over its single USB CDC endpoint.
+ * Upload a multi-module bytecode bundle to a GHI STM32C071 over its single
+ * USB CDC endpoint.
  *
  * Wire protocol (mirrors ghiboards/GHI_STM32C071/mpy_boot.c on the firmware
  * side):
  *
- *     host -> device: "MPY!" [len:u32 LE] [mpy bytes ... len]
+ *     host -> device: "!MPZ" [len:u32 LE] [bundle bytes ... len]
  *     device -> host: "STM32C071 MPY loader ready\r\n"   greeting on boot
  *                     "ACK\r\n"       after magic received
  *                     "LEN OK\r\n"    after length validated (0 < len <= 10240)
  *                     "OK\r\n"        after flash write, immediately before reset
  *                     "ERR:<code>\r\n" on any failure; device does NOT reset
  *
- * The device runs its upload window at boot: 1 second when it already holds a
- * valid .mpy in flash, 30 seconds when flash is empty. On "OK" it calls
- * NVIC_SystemReset(); the CDC endpoint disappears from the host, then
- * re-enumerates after ~1-2 seconds and the debugger protocol takes over the
- * same CDC.
+ * The device runs its upload window at boot: 3 seconds when it already
+ * holds a valid bundle in flash, 30 seconds when flash is empty.  On "OK"
+ * it calls NVIC_SystemReset(); the CDC endpoint disappears from the host,
+ * then re-enumerates after ~1-2 seconds and the debugger protocol takes
+ * over the same CDC.
+ *
+ * Bundle layout (little-endian; must match mpy_flash_importer.c on device):
+ *
+ *     +0    "MPMH"                 magic (4 bytes)
+ *     +4    count                  u16 -- number of modules
+ *     +6    reserved               u16 (zero)
+ *     +8    module 0 header + payload
+ *           ...
+ *
+ *   Each module (4-byte aligned):
+ *
+ *     +0    name_len               u16
+ *     +2    reserved               u16 (zero)
+ *     +4    mpy_len                u32
+ *     +8    name bytes             name_len bytes, no NUL
+ *     +8+alignedN  mpy bytes       mpy_len bytes
+ *
+ * The entry script (whatever `program` in the launch config points at) is
+ * packed as the module named "main".  Every other `.py` file in the same
+ * directory is packed under its stem (`ssd1306.py` -> "ssd1306"), so user
+ * code can `import ssd1306` and the on-device importer will find it.
  */
 
 import { KnownDevice } from "../protocol";
@@ -33,12 +55,11 @@ function serialport(): any {
     return serialportModule;
 }
 
-/** Magic bytes the firmware waits for. Keep in sync with mpy_boot.c.
- * Deliberately "!MPY" (not "MPY!"): the leading '!' can never start a MPYDBG1
- * debugger frame, so if this ends up going to a running debugger by mistake
- * the frame decoder rejects it byte-by-byte rather than consuming 4 bytes and
- * corrupting a subsequent real frame. */
-const MAGIC = Buffer.from("!MPY", "ascii");
+/** Wire-frame magic; leading '!' guarantees a mis-directed upload cannot
+ * confuse a running debugger's MPYDBG1 frame decoder. */
+const WIRE_MAGIC = Buffer.from("!MPZ", "ascii");
+/** Bundle-in-flash magic (start of payload bytes). */
+const BUNDLE_MAGIC = Buffer.from("MPMH", "ascii");
 
 /** How long to wait for the device to acknowledge, given it has just booted. */
 const ACK_TIMEOUT_MS = 5_000;
@@ -46,53 +67,121 @@ const ACK_TIMEOUT_MS = 5_000;
 /** How long to wait for the flash write to finish and the "OK" line to arrive. */
 const OK_TIMEOUT_MS = 15_000;
 
+export interface BundleModule {
+    /** Module name as it appears in Python `import`.  The entry module must
+     * be named exactly "main". */
+    name: string;
+    /** Bytecode as emitted by mpy-cross. */
+    mpy: Buffer;
+}
+
 export interface UploadResult {
-    /** Bytes actually transmitted, including the 8-byte header. */
+    /** Bytes actually transmitted, including the 8-byte wire header. */
     bytesSent: number;
     /** Any diagnostic lines the device sent before "OK". */
     diagnostics: string[];
 }
 
+/** Round `n` up to the next multiple of 4.  Names and mpy payloads are
+ * 4-byte aligned inside the bundle so the u32 length fields of subsequent
+ * modules stay aligned when the flash is read in place on STM32C0. */
+function align4(n: number): number {
+    return (n + 3) & ~3;
+}
+
 /**
- * Send `mpy` to the device on `port`, resolving when the firmware has replied
- * "OK" (meaning it is about to reset). The caller then closes the port and
- * waits for USB re-enumeration.
+ * Build the flash-format bundle from a list of modules.  This is what gets
+ * programmed to the reserved 10 KB region on device.
  *
- * Throws with the "ERR:<code>" line unaltered on a device-side failure; the
- * caller writes it into the Debug Console so a user hitting `ERR:len_range`
- * or `ERR:program` can see exactly what went wrong.
+ * Enforces the 63-char name limit (matching MP_DBG_FILE_MATCH_MAX on the
+ * board, and the firmware's practical assumption); anything longer would
+ * still upload but the debugger wouldn't be able to set breakpoints in it.
  */
-export async function uploadMpy(
+export function buildBundle(modules: BundleModule[]): Buffer {
+    if (modules.length === 0) {
+        throw new Error("empty module list");
+    }
+    if (modules.length > 65535) {
+        throw new Error(`too many modules (${modules.length}); u16 count limit`);
+    }
+    for (const m of modules) {
+        if (!m.name || m.name.length === 0) {
+            throw new Error("module with empty name");
+        }
+        if (m.name.length > 63) {
+            throw new Error(
+                `module name '${m.name}' is ${m.name.length} chars; on-device breakpoint `
+                + `matching caps at 63.  Rename or shorten a directory in its path.`);
+        }
+        if (m.mpy.length === 0) {
+            throw new Error(`module '${m.name}' has empty .mpy`);
+        }
+        if (m.mpy[0] !== 0x4d /* 'M' */) {
+            throw new Error(
+                `module '${m.name}' .mpy does not start with 'M' -- mpy-cross may have failed silently.`);
+        }
+    }
+    // Compute total size to allocate once.
+    let total = 8;  // "MPMH" + count + reserved
+    for (const m of modules) {
+        total += 8;                          // module header
+        total += align4(Buffer.byteLength(m.name, "utf8"));
+        total += align4(m.mpy.length);
+    }
+    const buf = Buffer.alloc(total);
+    let off = 0;
+    BUNDLE_MAGIC.copy(buf, off); off += 4;
+    buf.writeUInt16LE(modules.length, off); off += 2;
+    buf.writeUInt16LE(0, off);              off += 2;  // reserved
+    for (const m of modules) {
+        const nameBytes = Buffer.from(m.name, "utf8");
+        buf.writeUInt16LE(nameBytes.length, off); off += 2;
+        buf.writeUInt16LE(0, off);                off += 2;  // reserved
+        buf.writeUInt32LE(m.mpy.length, off);     off += 4;
+        nameBytes.copy(buf, off);                 off += align4(nameBytes.length);
+        m.mpy.copy(buf, off);                     off += align4(m.mpy.length);
+    }
+    // Sanity: we should have written exactly `total`.
+    if (off !== total) {
+        throw new Error(`bundle build accounting error: wrote ${off}, expected ${total}`);
+    }
+    return buf;
+}
+
+/**
+ * Send `modules` to the device on `port`, resolving when the firmware has
+ * replied "OK" (meaning it is about to reset).  The caller then closes the
+ * port and waits for USB re-enumeration.
+ *
+ * Throws with the "ERR:<code>" line unaltered on a device-side failure;
+ * the caller writes it into the Debug Console so a user hitting
+ * `ERR:len_range` or `ERR:program` can see exactly what went wrong.
+ */
+export async function uploadBundle(
     port: string,
-    mpy: Buffer,
+    modules: BundleModule[],
     device: KnownDevice,
     log?: (s: string) => void,
 ): Promise<UploadResult> {
     const note = (s: string): void => { if (log) { log("[stm32c071] " + s); } };
 
     const max = device.mpyMaxBytes ?? 10240;
-    if (mpy.length === 0) {
-        throw new Error("compiled .mpy is empty");
-    }
-    if (mpy.length > max) {
+    const bundle = buildBundle(modules);
+    if (bundle.length > max) {
+        // Point at the largest module first so the user knows what to trim.
+        const biggest = [...modules].sort((a, b) => b.mpy.length - a.mpy.length)[0];
         throw new Error(
-            `user code too large for ${device.name}: `
-            + `${mpy.length} bytes, but the board accepts at most ${max} bytes (10 KB).`);
-    }
-    if (mpy[0] !== 0x4d /* 'M' */) {
-        // The firmware checks this and rejects with ERR:mpy_magic. Catching it
-        // here saves a round trip and produces a clearer message.
-        throw new Error(
-            "compiled artifact does not start with 'M' -- mpy-cross may have failed silently.");
+            `bundle too large for ${device.name}: ${bundle.length} bytes, but the board `
+            + `accepts at most ${max} bytes (10 KB).  Biggest module: '${biggest.name}' `
+            + `at ${biggest.mpy.length} bytes.`);
     }
 
     // Build the framed request in one buffer so it is delivered as a single
-    // write; the firmware waits for exactly 4 magic bytes then 4 length bytes
-    // and there is no reason to split them.
+    // write; the firmware waits for exactly 4 magic bytes then 4 length bytes.
     const header = Buffer.alloc(8);
-    MAGIC.copy(header, 0);
-    header.writeUInt32LE(mpy.length, 4);
-    const frame = Buffer.concat([header, mpy]);
+    WIRE_MAGIC.copy(header, 0);
+    header.writeUInt32LE(bundle.length, 4);
+    const frame = Buffer.concat([header, bundle]);
 
     return new Promise<UploadResult>((resolve, reject) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,7 +213,7 @@ export async function uploadMpy(
         const ackTimer = setTimeout(() => {
             finish(new Error(
                 `${device.name}: no acknowledgement within ${ACK_TIMEOUT_MS} ms.\n`
-                + `The boot upload window is short (~1 s when flash already holds a .mpy). `
+                + `The boot upload window is short (~3 s when flash already holds a bundle). `
                 + `Tap RESET on the board and press F5 again.`));
         }, ACK_TIMEOUT_MS);
 
@@ -185,7 +274,8 @@ export async function uploadMpy(
                     // which the parser above tolerates).
                     setTimeout(() => {
                         if (done) { return; }
-                        note(`-> MPY! + ${mpy.length} bytes`);
+                        note(`-> !MPZ + ${bundle.length} bytes (${modules.length} modules: `
+                            + modules.map(m => `${m.name}=${m.mpy.length}B`).join(", ") + ")");
                         try {
                             sp.write(frame, (werr: Error | null | undefined) => {
                                 if (werr) {

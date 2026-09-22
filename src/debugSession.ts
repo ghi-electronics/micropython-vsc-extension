@@ -21,7 +21,7 @@ import { DeviceLink, findPorts, StackFrameInfo, DeviceCapabilities, DeviceVariab
 import { offerFirmwareInstall } from "./firmware/notInstalled";
 import { checkForUpdate, disableForProject } from "./firmware/updateCheck";
 import { updateFirmwareForFamily } from "./firmware/updateFirmware";
-import { uploadMpy, waitForDevice } from "./firmware/stm32c071Upload";
+import { BundleModule, uploadBundle, waitForDevice } from "./firmware/stm32c071Upload";
 import { compileToMpy } from "./mpyCross";
 import { Cond, KnownDevice, RebootFlag, StepMode, StopReason, STOP_REASON_TO_DAP, Scope as DevScope } from "./protocol";
 import { crc32 } from "./wireProtocol";
@@ -338,17 +338,38 @@ export class MicroPythonDebugSession extends DebugSession {
             this.stopOnEntry = false;
         }
 
-        // 1. Compile the entry .py to bytecode locally. armv6m for Cortex-M0+.
-        this.log(`Compiling ${args.program} with mpy-cross (${device.mpyArch})...`);
-        const compiled = await compileToMpy(
-            this.context, args.program, device.mpyArch ?? "armv6m",
-            (s) => this.output.appendLine(s));
-        this.log(`Compiled ${compiled.mpy.length} bytes (${compiled.source}).`);
+        // 1. Compile every .py in the project directory, not just the entry.
+        //    The entry file is packed under the fixed module name "main";
+        //    everything else is packed under its stem (e.g. ssd1306.py ->
+        //    "ssd1306") so user code can `import ssd1306` and the on-device
+        //    importer will find it.  Nested subdirectories are ignored --
+        //    this board's import surface is intentionally flat.
+        const programDir = path.dirname(args.program);
+        const entryBase = path.basename(args.program).toLowerCase();
+        const pyFiles = fs.readdirSync(programDir)
+            .filter((f) => f.toLowerCase().endsWith(".py"))
+            .map((f) => path.join(programDir, f));
+        this.log(`Compiling ${pyFiles.length} .py file(s) with mpy-cross (${device.mpyArch})...`);
+        const modules: BundleModule[] = [];
+        for (const p of pyFiles) {
+            const compiled = await compileToMpy(
+                this.context, p, device.mpyArch ?? "armv6m",
+                (s) => this.output.appendLine(s));
+            const isEntry = path.basename(p).toLowerCase() === entryBase;
+            const name = isEntry ? "main" : path.basename(p, path.extname(p));
+            modules.push({ name, mpy: compiled.mpy });
+            this.log(`  ${isEntry ? "* " : "  "}${name}: ${compiled.mpy.length} bytes (${path.basename(p)})`);
+        }
+        if (!modules.some((m) => m.name === "main")) {
+            throw new Error(
+                `${device.name}: the entry program ${args.program} was not found among the compiled .py files. `
+                + `Make sure it lives in the project folder.`);
+        }
 
         // 2. Upload over the CDC. The firmware answers ACK/LEN OK/OK, then
         //    calls NVIC_SystemReset() and disappears from the bus.
         //
-        //    On the second F5 in a session the board is past its 1 s upload
+        //    On the second F5 in a session the board is past its 3 s upload
         //    window and sitting in either the debug engine or __WFI(); the
         //    upload attempt will time out. Recover by pinging the debug
         //    protocol -- if it answers, ask for a hard reset so the loader
@@ -356,10 +377,10 @@ export class MicroPythonDebugSession extends DebugSession {
         //    up front, because probing on the *first* F5 would feed the
         //    loader four non-magic bytes and make it fall through into the
         //    execute path instead of accepting the upload.
-        this.log(`Uploading .mpy to ${initialPort}...`);
+        this.log(`Uploading bundle to ${initialPort}...`);
         let uploadPort = initialPort;
         try {
-            await uploadMpy(uploadPort, compiled.mpy, device,
+            await uploadBundle(uploadPort, modules, device,
                 (s) => this.output.appendLine(s));
         } catch (err) {
             const msg = (err as Error).message;
@@ -367,7 +388,7 @@ export class MicroPythonDebugSession extends DebugSession {
             if (!timedOut) {
                 throw err;
             }
-            this.log("No answer from the loader; the board may be running the previous .mpy. "
+            this.log("No answer from the loader; the board may be running the previous bundle. "
                 + "Asking the debug engine for a hard reset...");
             if (!await this.rebootLoaderIfRunning(uploadPort)) {
                 throw new Error(
@@ -385,7 +406,7 @@ export class MicroPythonDebugSession extends DebugSession {
             // reach its cdc_read_exact for the magic; without this a fast
             // Windows re-enum can beat the firmware to the read.
             await delay(200);
-            await uploadMpy(uploadPort, compiled.mpy, device,
+            await uploadBundle(uploadPort, modules, device,
                 (s) => this.output.appendLine(s));
         }
         this.log("Upload accepted; waiting for the board to reset...");
@@ -1097,23 +1118,35 @@ export class MicroPythonDebugSession extends DebugSession {
         const frame = args.frameId ?? 0;
         const expr = args.expression.trim();
 
-        // Bare-identifier shortcut. The device's evaluator compiles the
-        // expression against the frame's module globals only, so a hover on a
-        // function argument or a non-argument local would return NameError.
-        // For a lone name we can answer without compiling: look it up in the
-        // frame's Locals (which the host already knows how to fetch and name),
-        // and fall through to the device only if it is not a local -- in which
-        // case it is a global and the device evaluator handles it correctly.
+        // Bare-identifier shortcut.  The device's evaluator compiles the
+        // expression, which on compiler-less boards (e.g. STM32C071 with
+        // MICROPY_ENABLE_COMPILER=0) always fails -- so hover on any name
+        // would silently show nothing.  Answer the common case here without
+        // compiling: look the identifier up in the frame's Locals, then in
+        // Globals, and only fall through to the device evaluator (for
+        // real expressions) if it is neither.
         //
-        // The shortcut is limited to plain identifiers on purpose. Expressions
-        // like `a + b` where `a` or `b` is a local still hit the underlying
-        // limitation; fixing that needs the eval scope to carry locals, which
-        // is a wire-protocol change.
+        // The shortcut is limited to plain identifiers on purpose.
+        // Expressions like `a + b` still hit the compiler on the device; on
+        // boards without a compiler those will fail, and that's a wire-
+        // protocol change to fix (evaluator would need to carry a value
+        // rather than a string).
         if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(expr)) {
             try {
                 const slots = await this.link.variables(frame, DevScope.Locals);
                 const named = this.nameLocals(frame, slots);
                 const hit = named.find((v) => v.name === expr);
+                if (hit) {
+                    response.body = { result: hit.value, variablesReference: hit.handle };
+                    this.sendResponse(response);
+                    return;
+                }
+            } catch {
+                // Fall through to Globals lookup, then the device evaluator.
+            }
+            try {
+                const globals = await this.link.variables(frame, DevScope.Globals);
+                const hit = globals.find((v) => v.name === expr);
                 if (hit) {
                     response.body = { result: hit.value, variablesReference: hit.handle };
                     this.sendResponse(response);
