@@ -26,7 +26,7 @@ function serialport(): any {
 import {
     Cmd, Cond, FileFlag, RebootFlag, StepMode, Scope,
     FLAG_NON_CRITICAL, FLAG_REPLY, MAX_PAYLOAD,
-    KNOWN_DEVICES, IFACE_REPL, IFACE_DEBUG,
+    KNOWN_DEVICES, KnownDevice, IFACE_REPL, IFACE_DEBUG,
 } from "./protocol";
 
 export interface StoppedEvent {
@@ -64,6 +64,13 @@ const DEVICE_PATH_MAX = 127;
 export interface DevicePorts {
     repl?: string;
     debug?: string;
+    /**
+     * The known-device entry that matched the located debug port, when one
+     * did. Callers that need to specialise on board identity -- such as the
+     * single-CDC upload flow for STM32C071 -- read this rather than
+     * re-enumerating and re-matching VID/PID themselves.
+     */
+    device?: KnownDevice;
 }
 
 /**
@@ -171,16 +178,35 @@ export function trimToTail(devicePath: string, max = DEVICE_PATH_MAX): string {
 export async function findPorts(): Promise<DevicePorts> {
     const ports = await serialport().SerialPort.list();
     const result: DevicePorts = {};
-    const mine: any[] = (ports as any[]).filter((p: any) => {
+
+    // Match each port against a known device rather than a flat VID/PID set,
+    // so single-CDC boards can be identified and routed through a different
+    // launch path.
+    const mine: { port: any; device: KnownDevice }[] = [];
+    for (const p of (ports as any[])) {
         const vid = parseInt(p.vendorId ?? "", 16);
         const pid = parseInt(p.productId ?? "", 16);
-        return KNOWN_DEVICES.some((d) => d.vid === vid && d.pid === pid);
-    });
+        const device = KNOWN_DEVICES.find((d) => d.vid === vid && d.pid === pid);
+        if (device) {
+            mine.push({ port: p, device });
+        }
+    }
 
-    for (const p of mine) {
+    // Single-CDC boards -- the STM32C071 is the current one -- expose exactly
+    // one serial port and use it first for the .mpy upload handshake, then
+    // for the debug protocol. There is no REPL interface to distinguish.
+    const singleCdc = mine.find((m) => m.device.singleCdc);
+    if (singleCdc) {
+        result.debug = preferCallout(singleCdc.port.path);
+        result.device = singleCdc.device;
+        return result;
+    }
+
+    for (const { port: p, device } of mine) {
         const iface = interfaceOf(p.pnpId);
         if (iface === IFACE_DEBUG) {
             result.debug = preferCallout(p.path);
+            result.device = device;
         } else if (iface === IFACE_REPL) {
             result.repl = preferCallout(p.path);
         }
@@ -191,10 +217,11 @@ export async function findPorts(): Promise<DevicePorts> {
     // interface order, so the lower path is the REPL and the higher is the
     // debug channel. Only used when the metadata is genuinely absent, so this
     // cannot override a positive identification on Windows or Linux.
-    if (!result.debug && mine.length === 2 && mine.every((p: any) => !interfaceOf(p.pnpId))) {
-        const sorted = mine.map((p: any) => p.path as string).sort();
+    if (!result.debug && mine.length === 2 && mine.every((m) => !interfaceOf(m.port.pnpId))) {
+        const sorted = mine.map((m) => m.port.path as string).sort();
         result.repl = preferCallout(sorted[0]);
         result.debug = preferCallout(sorted[1]);
+        result.device = mine[0].device;
     }
     return result;
 }

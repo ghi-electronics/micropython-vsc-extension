@@ -211,6 +211,7 @@
     "firmware",
     "ghi electronics",
     "stm32",
+    "stm32c071",
     "esp32",
     "esp32-s2",
     "esp32-s3",

@@ -116,11 +116,18 @@ export const MAX_PAYLOAD = 512;
 /**
  * Boards we know how to talk to.
  *
- * Every entry must present the debug protocol on its second CDC function, so
- * the interface numbers below hold for all of them. Note the Pico deliberately
- * keeps stock MicroPython's VID/PID: a board running stock firmware therefore
- * matches here too, but exposes only one CDC, so findPorts() finds a REPL and
- * no debug channel -- which is the correct answer for it.
+ * Most entries present the debug protocol on their second CDC function, so
+ * IFACE_DEBUG below picks out the right port on a two-CDC device. Note the
+ * Pico deliberately keeps stock MicroPython's VID/PID: a board running stock
+ * firmware therefore matches here too, but exposes only one CDC, so findPorts()
+ * finds a REPL and no debug channel -- which is the correct answer for it.
+ *
+ * `singleCdc` marks a board that presents a single CDC endpoint carrying both
+ * the boot-time .mpy upload window and, after reset, the debug protocol.
+ * The STM32C071 is that shape: no filesystem, no REPL, one interface used
+ * sequentially for two purposes. findPorts() treats a single-CDC board's port
+ * as the debug port; the launch flow uploads the compiled .mpy over that
+ * same port before attaching the debug protocol.
  *
  * VID/PID is only used to locate the port and identify a supported device
  * class; the update check uses MICROPY_HW_BOARD_NAME (from the manifest) to
@@ -128,12 +135,40 @@ export const MAX_PAYLOAD = 512;
  * USB identity is not listed here can still be debugged by pinning debugPort
  * in launch.json -- see the ChromeOS section of the README for the pattern.
  */
-export interface KnownDevice { vid: number; pid: number; name: string; }
+export interface KnownDevice {
+    vid: number;
+    pid: number;
+    name: string;
+    /**
+     * True when this device presents a single CDC endpoint, used first for
+     * an .mpy upload handshake at boot and then for the debug protocol.
+     * F5 compiles the entry script with mpy-cross, uploads via the MPY!
+     * wire protocol, waits for the board to reset, and reconnects.
+     */
+    singleCdc?: boolean;
+    /**
+     * mpy-cross target architecture flag for a single-CDC board.
+     * Passed as `-march=<arch>`. Ignored for boards that hold their own
+     * runtime compiler.
+     */
+    mpyArch?: string;
+    /**
+     * Maximum size in bytes of the .mpy the board will accept. The upload
+     * is refused past this and the error surfaces before anything is written.
+     */
+    mpyMaxBytes?: number;
+}
 export const KNOWN_DEVICES: KnownDevice[] = [
     { vid: 0x2e8a, pid: 0x0005, name: "Raspberry Pi Pico / Pico 2" },
     // esp32 computes its PID from a CFG_TUD_* bitmap, so two CDCs yields 0x4002
     // where stock (one CDC) is 0x4001 -- a distinct identity for free.
     { vid: 0x303a, pid: 0x4002, name: "ESP32-S2 / S3" },
+    // STM32C071: single CDC, MPY! upload window at boot, then debug protocol.
+    // 10 KB is the reserved flash region for the .mpy in ghiboards/GHI_STM32C071.
+    {
+        vid: 0x1b9f, pid: 0xf10b, name: "GHI STM32C071 Debug",
+        singleCdc: true, mpyArch: "armv6m", mpyMaxBytes: 10240,
+    },
 ];
 
 /**

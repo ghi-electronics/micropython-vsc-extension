@@ -21,7 +21,9 @@ import { DeviceLink, findPorts, StackFrameInfo, DeviceCapabilities, DeviceVariab
 import { offerFirmwareInstall } from "./firmware/notInstalled";
 import { checkForUpdate, disableForProject } from "./firmware/updateCheck";
 import { updateFirmwareForFamily } from "./firmware/updateFirmware";
-import { Cond, RebootFlag, StepMode, StopReason, STOP_REASON_TO_DAP, Scope as DevScope } from "./protocol";
+import { uploadMpy, waitForDevice } from "./firmware/stm32c071Upload";
+import { compileToMpy } from "./mpyCross";
+import { Cond, KnownDevice, RebootFlag, StepMode, StopReason, STOP_REASON_TO_DAP, Scope as DevScope } from "./protocol";
 import { crc32 } from "./wireProtocol";
 import { deriveLocalNames, verifyAgainstDevice } from "./localNames";
 
@@ -161,6 +163,17 @@ export class MicroPythonDebugSession extends DebugSession {
                 return;
             }
 
+            // Boards with a single CDC endpoint upload-then-debug (STM32C071)
+            // take a different path: compile locally with mpy-cross, send the
+            // .mpy over the same CDC that will carry the debug protocol,
+            // wait for the board to reset, then attach normally.
+            if (ports.device?.singleCdc) {
+                await this.launchSingleCdc(args, ports.device, devicePort);
+                this.sendResponse(response);
+                this.sendEvent(new InitializedEvent());
+                return;
+            }
+
             // Before touching the debug channel, see whether the manifest has a
             // newer firmware.  Needs the REPL port (CDC0); the check is silent
             // and skipped whenever anything about it is unavailable so a
@@ -231,6 +244,183 @@ export class MicroPythonDebugSession extends DebugSession {
             this.showLostConnection();
             this.sendErrorResponse(response, 1001, (err as Error).message);
         }
+    }
+
+    /**
+     * Try to catch a single-CDC board that has already run past its upload
+     * window and get it back to the loader by way of the debug protocol.
+     *
+     * Returns true when the ping succeeded and a hard reboot was issued.
+     * Returns false when there is nothing running on the debug channel --
+     * the normal state on a first F5, when the loader itself is holding the
+     * port open waiting for MPY! bytes. Never throws: the fallback is to try
+     * the upload directly, and the timeout there produces the same error
+     * message the user would have seen anyway.
+     */
+    private async rebootLoaderIfRunning(port: string): Promise<boolean> {
+        // Small delay so the port from the just-failed uploadMpy has fully
+        // released, and so the running debugger has a chance to drain the
+        // MPY! + payload junk out of its frame decoder and resync on the
+        // next MPYDBG1 magic we're about to send.
+        await delay(300);
+
+        const probe = new DeviceLink();
+        try {
+            await probe.open(port);
+        } catch (e) {
+            this.log(`reboot-probe: failed to open ${port}: ${(e as Error).message}`);
+            return false;
+        }
+        try {
+            // First ping may be discarded while the parser is still resyncing
+            // from the garbage we just sent; give up to three attempts with
+            // 1 second each. Total worst case = 3s, still snappy for first F5
+            // when the loader is silent.
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                const answered = await Promise.race([
+                    probe.ping().catch(() => false),
+                    new Promise<boolean>((r) => setTimeout(() => r(false), 1000)),
+                ]);
+                if (answered) {
+                    this.log(`reboot-probe: debug engine answered on attempt ${attempt}`);
+                    // The reboot() helper flushes and gives the device its ~50 ms
+                    // detach window. Any close error from that point is expected --
+                    // the board is on its way to a hard reset.
+                    try {
+                        await probe.reboot(RebootFlag.Hard);
+                        this.log(`reboot-probe: hard-reset command sent`);
+                    } catch (e) {
+                        this.log(`reboot-probe: reboot command threw (expected as the board resets): ${(e as Error).message}`);
+                    }
+                    return true;
+                }
+            }
+            this.log(`reboot-probe: no answer after 3 attempts (3 s total)`);
+            return false;
+        } finally {
+            await probe.close().catch(() => { /* already gone */ });
+        }
+    }
+
+    /**
+     * Launch path for single-CDC upload-then-debug boards (STM32C071).
+     *
+     * Distinct from the main launchRequest body in three ways:
+     *   1. No filesystem sync: the board has no filesystem. Only main.py is
+     *      compiled and uploaded as bytecode.
+     *   2. No firmware-update REPL query: there is no REPL to interrogate.
+     *   3. No RebootFlag.WaitForDebugger reboot round-trip: the board resets
+     *      itself as a side effect of the upload and comes back running the
+     *      new .mpy. stopOnEntry is not supported here -- the firmware's
+     *      halt-at-entry hooks are disabled in this build -- so a request
+     *      for it is logged and downgraded.
+     */
+    private async launchSingleCdc(
+        args: LaunchArgs,
+        device: KnownDevice,
+        initialPort: string,
+    ): Promise<void> {
+        if (!args.program) {
+            throw new Error("No program specified for the debug session.");
+        }
+        if (!args.program.toLowerCase().endsWith(".py")) {
+            throw new Error(
+                `${device.name} only accepts a .py entry script -- got ${args.program}. `
+                + `Point 'program' at the source file, not a precompiled artifact.`);
+        }
+        // The firmware stores exactly one .mpy blob; the workspace's main.py
+        // is the entry point, and any modules it imports would have to be
+        // rolled into it manually. 'sync' is silently ignored -- the launch
+        // template defaults it to true, so warning would fire on every F5.
+        if (this.stopOnEntry) {
+            this.log(`[${device.name}] stopOnEntry is not supported on this board -- `
+                + `firmware halt-at-entry hooks are disabled. Set a breakpoint on the first line instead.`);
+            this.stopOnEntry = false;
+        }
+
+        // 1. Compile the entry .py to bytecode locally. armv6m for Cortex-M0+.
+        this.log(`Compiling ${args.program} with mpy-cross (${device.mpyArch})...`);
+        const compiled = await compileToMpy(
+            this.context, args.program, device.mpyArch ?? "armv6m",
+            (s) => this.output.appendLine(s));
+        this.log(`Compiled ${compiled.mpy.length} bytes (${compiled.source}).`);
+
+        // 2. Upload over the CDC. The firmware answers ACK/LEN OK/OK, then
+        //    calls NVIC_SystemReset() and disappears from the bus.
+        //
+        //    On the second F5 in a session the board is past its 1 s upload
+        //    window and sitting in either the debug engine or __WFI(); the
+        //    upload attempt will time out. Recover by pinging the debug
+        //    protocol -- if it answers, ask for a hard reset so the loader
+        //    window reopens -- then retry the upload once. We cannot probe
+        //    up front, because probing on the *first* F5 would feed the
+        //    loader four non-magic bytes and make it fall through into the
+        //    execute path instead of accepting the upload.
+        this.log(`Uploading .mpy to ${initialPort}...`);
+        let uploadPort = initialPort;
+        try {
+            await uploadMpy(uploadPort, compiled.mpy, device,
+                (s) => this.output.appendLine(s));
+        } catch (err) {
+            const msg = (err as Error).message;
+            const timedOut = /no acknowledgement/i.test(msg);
+            if (!timedOut) {
+                throw err;
+            }
+            this.log("No answer from the loader; the board may be running the previous .mpy. "
+                + "Asking the debug engine for a hard reset...");
+            if (!await this.rebootLoaderIfRunning(uploadPort)) {
+                throw new Error(
+                    `${device.name}: the loader did not answer, and the debug engine did `
+                    + `not answer either. Press RESET on the board and try F5 again.`);
+            }
+            // Give USB a moment to detach after the hard-reset before we start
+            // polling for it to reappear. 400 ms is enough for the CDC to
+            // drop; the firmware then re-enumerates and opens its 3 s upload
+            // window, so waitForDevice's 100 ms polling catches it quickly.
+            await delay(400);
+            uploadPort = await waitForDevice(device, 15_000, 100);
+            this.log(`Retrying upload on ${uploadPort}...`);
+            // Small settle so the loader has time to send its greeting and
+            // reach its cdc_read_exact for the magic; without this a fast
+            // Windows re-enum can beat the firmware to the read.
+            await delay(200);
+            await uploadMpy(uploadPort, compiled.mpy, device,
+                (s) => this.output.appendLine(s));
+        }
+        this.log("Upload accepted; waiting for the board to reset...");
+
+        // 3. Wait for USB re-enumeration. Windows tends to reuse the same COM
+        //    number, but the finder matches VID/PID rather than depending on that.
+        await delay(1500);
+        const reconnectPort = await waitForDevice(device);
+        this.log(`Reconnected on ${reconnectPort}.`);
+
+        // 4. Open the debug channel on the (re-enumerated) port and take
+        //    over. From here on everything looks like a standard debug attach.
+        await this.link.open(reconnectPort);
+        this.attachEvents();
+
+        try {
+            await this.link.setBreakpoints([]);
+            this.log("attach: setBreakpoints ok");
+        } catch (e) {
+            this.log(`attach: setBreakpoints threw: ${(e as Error).message}`);
+        }
+        try {
+            await this.link.conditions(Cond.Attached, Cond.Stopped);
+            this.log("attach: Cond.Attached set");
+        } catch (e) {
+            this.log(`attach: conditions threw: ${(e as Error).message}`);
+        }
+
+        try {
+            this.caps = await this.link.capabilities();
+        } catch {
+            this.caps = undefined;
+        }
+
+        this.sessionLive = true;
     }
 
     /**
