@@ -504,6 +504,18 @@ export class DeviceLink extends EventEmitter {
         await new Promise((r) => setTimeout(r, 250));
     }
 
+    /**
+     * Ask the device to reboot into its ROM update loader (STM32 ROM DFU on
+     * STM32C071). Fire-and-forget: the device acks, flushes storage, detaches
+     * USB and jumps into the ROM, so any reply the host might have wanted
+     * arrives too late. The caller then waits for the DFU device to appear.
+     */
+    async enterDfu(): Promise<void> {
+        await this.sendAndFlush(Cmd.MonitorEnterDfu);
+        // Same 50 ms detach window the reboot path uses -- see reboot().
+        await new Promise((r) => setTimeout(r, 250));
+    }
+
     /** Filesystem block size and usage, in blocks. */
     async stat(path = ""): Promise<{ rc: number; blockSize: number; total: number; free: number }> {
         const nameBuf = Buffer.from(path, "utf8");

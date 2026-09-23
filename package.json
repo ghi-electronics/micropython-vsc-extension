@@ -1,7 +1,7 @@
 {
   "name": "micropython-debugger",
   "displayName": "MicroPython Debugger",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Source-level MicroPython debugging over USB.",
   "publisher": "ghielectronics",
   "license": "MIT",
@@ -160,7 +160,7 @@
           {
             "type": "micropython",
             "request": "launch",
-            "name": "MicroPython Deploy and Debug (USB)",
+            "name": "MicroPython Deploy and Debug",
             "program": "${workspaceFolder}/main.py",
             "sync": true,
             "stopOnEntry": false,
@@ -169,12 +169,12 @@
         ],
         "configurationSnippets": [
           {
-            "label": "MicroPython: Deploy and Debug over USB",
+            "label": "MicroPython: Deploy and Debug",
             "description": "Deploy the workspace to the device and debug it.",
             "body": {
               "type": "micropython",
               "request": "launch",
-              "name": "MicroPython Deploy and Debug (USB)",
+              "name": "MicroPython Deploy and Debug",
               "program": "^\"\\${workspaceFolder}/main.py\"",
               "sync": true,
               "stopOnEntry": false,
@@ -194,7 +194,8 @@
     "@vscode/debugadapter": "^1.65.0",
     "@vscode/debugprotocol": "^1.65.0",
     "esptool-js": "^0.6.1",
-    "serialport": "^12.0.0"
+    "serialport": "^12.0.0",
+    "usb": "^2.14.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

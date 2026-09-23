@@ -9,10 +9,10 @@
       "bootloader": {
         "boardId": "RPI-RP2"
       },
-      "version": "1.29.0-5-g62449e5a0c",
-      "date": "2026-09-18",
-      "url": "micropython-rp2040-generic-v1.29.0-5-g62449e5a0c.uf2",
-      "md5": "431A82194FE12C3EFB86F0ACDBA354A2",
+      "version": "1.29.0-15-g7643efa171",
+      "date": "2026-09-23",
+      "url": "micropython-rp2040-generic-v1.29.0-15-g7643efa171.uf2",
+      "md5": "45CE6B4792E42145A03D893521BA0408",
       "size": 732160,
       "update_fw_id": "GHIMPDG002",
       "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
@@ -24,10 +24,10 @@
       "bootloader": {
         "boardId": "RP2350"
       },
-      "version": "1.29.0-5-g62449e5a0c",
-      "date": "2026-09-18",
-      "url": "micropython-rp2350-generic-v1.29.0-5-g62449e5a0c.uf2",
-      "md5": "74ADF5431E4E4C7E37941D36F5FF4273",
+      "version": "1.29.0-15-g7643efa171",
+      "date": "2026-09-23",
+      "url": "micropython-rp2350-generic-v1.29.0-15-g7643efa171.uf2",
+      "md5": "E5BA6840EC96B75C8735135AC7975BD6",
       "size": 710656,
       "update_fw_id": "GHIMPDG003",
       "enterBootloader": "Unplug the board, then plug the USB cable back in while holding BOOTSEL."
@@ -42,11 +42,11 @@
           "pid": "0x0002"
         }
       },
-      "version": "1.29.0-5-g62449e5a0c",
-      "date": "2026-09-18",
-      "url": "micropython-esp32-s2-generic-v1.29.0-5-g62449e5a0c.bin",
-      "md5": "23DE0908EF3E86900E4BCFC162FA5AA3",
-      "size": 1575072,
+      "version": "1.29.0-15-g7643efa171",
+      "date": "2026-09-23",
+      "url": "micropython-esp32-s2-generic-v1.29.0-15-g7643efa171.bin",
+      "md5": "6E4D913E67D1118150FFBB1347F5816C",
+      "size": 1575184,
       "update_fw_id": "GHIMPDG005",
       "address": 0,
       "chip": "ESP32-S2",
@@ -62,11 +62,11 @@
           "pid": "0x1001"
         }
       },
-      "version": "1.29.0-5-g62449e5a0c",
-      "date": "2026-09-18",
-      "url": "micropython-esp32-s3-generic-v1.29.0-5-g62449e5a0c.bin",
-      "md5": "CBC10C812D42C9C03429F4CF7DD641A7",
-      "size": 1819376,
+      "version": "1.29.0-15-g7643efa171",
+      "date": "2026-09-23",
+      "url": "micropython-esp32-s3-generic-v1.29.0-15-g7643efa171.bin",
+      "md5": "72323B762D25BFE6076E4126AEFAFA8D",
+      "size": 1819504,
       "update_fw_id": "GHIMPDG006",
       "address": 0,
       "chip": "ESP32-S3",
@@ -83,16 +83,78 @@
           "pid": "0x1001"
         }
       },
-      "version": "1.29.0-5-g62449e5a0c",
-      "date": "2026-09-18",
-      "url": "micropython-esp32-s3-octal-v1.29.0-5-g62449e5a0c.bin",
-      "md5": "F7ED025A22A71D5F9161DDACBA58D992",
-      "size": 1822768,
+      "version": "1.29.0-15-g7643efa171",
+      "date": "2026-09-23",
+      "url": "micropython-esp32-s3-octal-v1.29.0-15-g7643efa171.bin",
+      "md5": "D883D7577C36C8AAC9E5A3248E85DFEE",
+      "size": 1822912,
       "update_fw_id": "GHIMPDG007",
       "address": 0,
       "chip": "ESP32-S3",
       "resetBefore": "usb_reset",
       "enterBootloader": "Hold BOOT, tap RESET, then release BOOT."
+    },
+    {
+      "id": "ESP32_GENERIC_UART0",
+      "device_support": "ESP32 Generic UART0 (no USB)",
+      "kind": "esp-rom",
+      "bootloader": {
+        "usb": [
+          {
+            "vid": "0x10C4",
+            "pid": "0xEA60",
+            "chip": "CP2102"
+          },
+          {
+            "vid": "0x1A86",
+            "pid": "0x7523",
+            "chip": "CH340"
+          },
+          {
+            "vid": "0x1A86",
+            "pid": "0x55D4",
+            "chip": "CH9102"
+          },
+          {
+            "vid": "0x0403",
+            "pid": "0x6001",
+            "chip": "FT232"
+          }
+        ]
+      },
+      "version": "1.29.0-15-g7643efa171",
+      "date": "2026-09-23",
+      "url": "micropython-esp32-generic-uart0-v1.29.0-15-g7643efa171.bin",
+      "md5": "E842D51771EC94B625CAA25FC828ABA1",
+      "size": 1829024,
+      "update_fw_id": "GHIMPDG008",
+      "address": 0,
+      "chip": "ESP32",
+      "enterBootloader": "Hold BOOT, then disconnect and reconnect the USB cable to enter bootloader mode."
+    },
+    {
+      "id": "STM32C071_GENERIC_R24F128",
+      "device_support": "DUELink, STM32C071 24KB RAM 128KB FLASH",
+      "kind": "stm32-dfu",
+      "bootloader": {
+        "running": {
+          "vid": "0x1B9F",
+          "pid": "0xF302"
+        },
+        "dfu": {
+          "vid": "0x0483",
+          "pid": "0xDF11"
+        }
+      },
+      "version": "1.29.0-15-g7643efa171",
+      "date": "2026-09-23",
+      "url": "micropython-stm32c071-generic-r24f128-v1.29.0-15-g7643efa171.bin",
+      "md5": "3A489EB5F962D82109A93A2CA102BE51",
+      "size": 105744,
+      "update_fw_id": "GHIMPDG009",
+      "address": "0x08000000",
+      "chip": "STM32C071RB",
+      "enterBootloader": "Hold BOOT0 high while tapping RESET."
     }
   ]
 }

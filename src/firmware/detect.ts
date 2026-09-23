@@ -16,6 +16,7 @@
 import type { BootBoard, FlashKind } from "./boards";
 import { SERIAL_BOOTLOADERS, familyForBoardId } from "./boards";
 import { findUf2Drives, type Uf2Drive } from "./drives";
+import { listDfuDevices, STM32_DFU_VID, STM32_DFU_PID } from "./stm32Dfu";
 
 // serialport is loaded lazily for the same reason deviceLink.ts does it: it is
 // a native module, and a load failure must surface from the command that needed
@@ -108,6 +109,28 @@ export async function detectBootloaders(): Promise<DetectedBoot[]> {
     } catch {
         // No serialport module, or no permission to enumerate.  UF2 drives may
         // still have been found, so this is not fatal on its own.
+    }
+
+    // STM32 ROM DFU is a USB class-DFU device, not a serial port, so it is
+    // located via libusb.  Wrapped in its own try because the `usb` native
+    // module can fail to load (Windows without WinUSB, Linux without udev
+    // permission) and that must not take down the whole detector: users
+    // updating a UF2/esp-rom board have no reason to also have libusb wired
+    // up on their machine.
+    try {
+        const dfu = await listDfuDevices();
+        for (let i = 0; i < dfu.length; i++) {
+            out.push({
+                kind: "stm32-dfu",
+                label: "STM32 ROM DFU",
+                candidates: [],
+                vendorId: STM32_DFU_VID,
+                productId: STM32_DFU_PID,
+            });
+        }
+    } catch {
+        // Silent: see comment above.  Ignored on purpose so DFU support
+        // failing to load never blocks the UF2 or esp-rom path.
     }
 
     return out;

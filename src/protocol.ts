@@ -25,6 +25,13 @@ export const enum Cmd {
     /** device -> host event: program stdout */
     MonitorOutput = 0x00000001,
     MonitorReboot = 0x00000007,
+    /**
+     * Ask the port to leave the running firmware and reboot into its ROM
+     * update loader (STM32 ROM DFU on GHI STM32C071). Ports without a DFU
+     * path keep the weak-default no-op on the device side; this command
+     * therefore only makes sense on boards whose manifest kind is "stm32-dfu".
+     */
+    MonitorEnterDfu = 0x00000008,
 
     ExecutionStep = 0x00020003,
     ExecutionCapabilities = 0x00020008,
@@ -165,8 +172,9 @@ export const KNOWN_DEVICES: KnownDevice[] = [
     { vid: 0x303a, pid: 0x4002, name: "ESP32-S2 / S3" },
     // STM32C071: single CDC, MPY! upload window at boot, then debug protocol.
     // 10 KB is the reserved flash region for the .mpy in ghiboards/GHI_STM32C071.
+    // PID sits after 0xF300 (DueLink) and 0xF301 (Microblock) in GHI's PID space.
     {
-        vid: 0x1b9f, pid: 0xf10b, name: "GHI STM32C071 Debug",
+        vid: 0x1b9f, pid: 0xf302, name: "GHI STM32C071 Debug",
         singleCdc: true, mpyArch: "armv6m", mpyMaxBytes: 10240,
     },
 ];

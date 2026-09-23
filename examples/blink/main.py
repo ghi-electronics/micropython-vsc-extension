@@ -20,15 +20,15 @@ from machine import Pin
 import time
 
 LED_PIN = 21
-DELAY_MS = 500
+DELAY_MS = 100
 
-led = Pin(LED_PIN, Pin.OUT)
+led = Pin('B8', Pin.OUT)
 
 
 def blink(n):
     led.value(1)
     n = next_count(n)
-    print("count is", n)
+    print("count is:", n)
     time.sleep_ms(DELAY_MS)
     led.value(0)
     return n

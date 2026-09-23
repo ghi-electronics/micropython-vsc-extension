@@ -182,10 +182,30 @@ export class MicroPythonDebugSession extends DebugSession {
                         + "(auto-detect is disabled for UART since the port belongs "
                         + "to the bridge chip, not the device itself).");
                 }
-                await this.launchUart(args, args.debugPort, args.debugBaud ?? 115200);
-                this.sendResponse(response);
-                this.sendEvent(new InitializedEvent());
-                return;
+                // Guardrail: if the named port belongs to a known native-USB
+                // board (STM32C071 singleCdc upload flow, or any ESP32 with
+                // native USB CDC), treating it as raw UART is silently wrong
+                // -- the STM32 loader window sees the MPYDBG1 marker instead
+                // of "!MPZ" and aborts, the board reboot-loops forever.
+                // findPorts() looks up the port's VID/PID against KNOWN_DEVICES
+                // for us; if it matches, ignore the misconfigured "uart" hint
+                // and fall through to the correct native-USB path below.
+                const nativeUsb = await findPorts();
+                const overrideIsNativeUsb = nativeUsb.debug === args.debugPort
+                    || nativeUsb.repl === args.debugPort;
+                if (overrideIsNativeUsb && nativeUsb.device) {
+                    this.log(
+                        `Ignoring debugInterface: "uart" -- ${args.debugPort} `
+                        + `belongs to a native-USB board (${nativeUsb.device.name}). `
+                        + `Using USB CDC instead. Remove debugInterface/debugBaud `
+                        + `from launch.json to clear this warning.`);
+                    // Fall through to the USB CDC / singleCdc path below.
+                } else {
+                    await this.launchUart(args, args.debugPort, args.debugBaud ?? 115200);
+                    this.sendResponse(response);
+                    this.sendEvent(new InitializedEvent());
+                    return;
+                }
             }
 
             const ports = await findPorts();

@@ -96,6 +96,14 @@ export async function openDeviceShell(existing?: vscode.Terminal): Promise<vscod
 
     const ports = await findPorts();
     if (!ports.repl) {
+        // A single-CDC board (STM32C071 today) has no REPL by design -- one
+        // CDC endpoint carries the .mpy upload window and then the debug
+        // protocol. Say so directly rather than "not found".
+        if (ports.device?.singleCdc) {
+            void vscode.window.showErrorMessage(
+                `The device ${ports.device.name} does not support REPL.`);
+            return undefined;
+        }
         void vscode.window.showErrorMessage(
             ports.debug
                 ? "Found the debug port but not the REPL port."

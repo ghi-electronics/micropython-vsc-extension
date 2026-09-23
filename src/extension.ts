@@ -57,6 +57,16 @@ export function activate(context: vscode.ExtensionContext): void {
         // every time, and that list also contains debuggers that cannot drive a
         // board.
         vscode.debug.onDidStartDebugSession((s) => { void offerLaunchJson(s); }),
+        // Focus the Debug Console on F5 no matter which panel the user was in
+        // (Terminal, Output, Problems...).  Deploy + reset can take a few
+        // seconds, and if nothing on screen changes users assume the keystroke
+        // was lost.  Only for our own debug type so other debuggers keep the
+        // panel the user chose.
+        vscode.debug.onDidStartDebugSession((s) => {
+            if (s.type === "micropython") {
+                void vscode.commands.executeCommand("workbench.debug.action.focusRepl");
+            }
+        }),
     );
 }
 
@@ -77,6 +87,14 @@ class ConfigProvider implements vscode.DebugConfigurationProvider {
     /**
      * Fills in a usable configuration when the user presses F5 with no
      * launch.json, so the first run needs no setup.
+     *
+     * Also focuses the Debug Console right here rather than in
+     * onDidStartDebugSession: that later hook does not fire until the
+     * launchRequest has completed (deploy + reset, several seconds on
+     * STM32C071), and the whole point is to give the user something to
+     * look at during that wait. resolveDebugConfiguration fires
+     * synchronously the moment F5 is pressed, before the debug adapter is
+     * even created, which is the earliest we can reach the UI.
      */
     resolveDebugConfiguration(
         folder: vscode.WorkspaceFolder | undefined,
@@ -95,7 +113,7 @@ class ConfigProvider implements vscode.DebugConfigurationProvider {
                 return undefined;
             }
             config.type = "micropython";
-            config.name = "MicroPython Deploy and Debug (USB)";
+            config.name = "MicroPython Deploy and Debug";
             config.request = "launch";
             config.program = program;
             config.sync = true;
@@ -105,6 +123,14 @@ class ConfigProvider implements vscode.DebugConfigurationProvider {
             if (root) {
                 config.program = path.join(root, "main.py");
             }
+        }
+        // Focus the Debug Console the moment F5 is pressed, so users see the
+        // "Opening... connecting..." log while the several-second deploy runs
+        // rather than sitting on Terminal/Problems wondering if F5 registered.
+        // Guarded on type so other debuggers configured in the workspace keep
+        // whatever panel focus behavior they set.
+        if (config.type === "micropython") {
+            void vscode.commands.executeCommand("workbench.debug.action.focusRepl");
         }
         return config;
     }
@@ -268,7 +294,7 @@ const SAMPLE_LAUNCH = `{
         {
             "type": "micropython",
             "request": "launch",
-            "name": "MicroPython Deploy and Debug (USB)",
+            "name": "MicroPython Deploy and Debug",
             // Uncomment and set when auto-detect fails
             // ChromeOS, custom firmware, or more than one board on the same machine
             // "debugPort": "/dev/ttyACM1", // "COMx" on Windows

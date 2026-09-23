@@ -30,9 +30,11 @@ import { writeUf2 } from "./drives";
 import { EspNotRespondingError, flashEsp, probeEspChip } from "./espFlash";
 import { flashGhiLoader } from "./ghiLoaderFlash";
 import {
-    downloadFirmware, isAvailable, loadManifest, md5, parseHexId,
+    downloadFirmware, familyAddress, isAvailable, loadManifest, md5, parseHexId,
     type FirmwareFamily, type Manifest,
 } from "./manifest";
+import { flashStm32Dfu } from "./stm32Dfu";
+import { DeviceLink } from "../deviceLink";
 
 /**
  * How an update ended, so a caller can offer the right next thing.
@@ -297,6 +299,25 @@ async function flash(
                 return;
             }
 
+            if (found.kind === "stm32-dfu") {
+                // The DFU device does not appear on the serialport list, so
+                // detect.ts locates it via libusb -- see waitForDfuDevice.
+                // Address defaults to 0x08000000 (STM32 main flash base) when
+                // the manifest omits it, but every stm32-dfu entry we ship
+                // sets it explicitly for clarity.
+                const report = percentReporter(progress, "Wrote");
+                await flashStm32Dfu({
+                    vendorId: found.vendorId ?? 0,
+                    productId: found.productId ?? 0,
+                    data,
+                    address: familyAddress(entry) || 0x08000000,
+                    onStatus: (line) => progress.report({ message: line }),
+                    onProgress: (written, total) => report(written, total),
+                    log: (line) => output.appendLine(line),
+                });
+                return;
+            }
+
             const report = percentReporter(progress, "Wrote");
             await flashEsp({
                 // esptool says "Erasing flash (this may take a while)..." and
@@ -318,7 +339,7 @@ async function flash(
                 vendorId: found.vendorId ?? 0,
                 productId: found.productId ?? 0,
                 data,
-                address: entry.address ?? 0,
+                address: familyAddress(entry),
                 expectedChip: entry.chip,
                 before: entry.resetBefore,
                 onProgress: (written, total) => report(written, total),
@@ -358,11 +379,22 @@ async function reportDone(found: DetectedBoot, entry: FirmwareFamily): Promise<v
     // uf2-drive / ghi-loader: the board restarts itself as part of the flash
     // (uf2 unmounts + boots, ghi bootloader R command jumps to firmware).
     if (found.kind === "esp-rom") {
+        // The UART-bridge ESP32 (ESP32_GENERIC_UART0) has no reliable auto-
+        // restart from ROM: many DevKit variants have no RESET pin exposed
+        // (only BOOT + EN, and EN alone does not leave the ROM), and even
+        // where wiring is standard, esptool's after=hard_reset is fragile
+        // enough that we do not depend on it. Tell users to replug for the
+        // same reason they used replug to enter bootloader: it always works,
+        // including when firmware is crashed.
+        const uart = entry.id === "ESP32_GENERIC_UART0";
         void vscode.window.showInformationMessage(
             `Your ${entry.id} is ready to debug`,
             {
                 modal: true,
-                detail: "Tap RESET on the board, then press F5 to start debugging.",
+                detail: uart
+                    ? "Disconnect and reconnect the USB cable to boot the new firmware, "
+                        + "then press F5 to start debugging."
+                    : "Tap RESET on the board, then press F5 to start debugging.",
             }, "OK");
         return;
     }
@@ -619,6 +651,29 @@ async function updateFirmwareInner(
     const verify = makeVerifier(output);
     let ready = (await detectBootloaders())
         .filter((b) => b.kind === kind && !b.ambiguous);
+
+    // STM32 DFU can be entered automatically when the running firmware is
+    // present: the extension sends Monitor_EnterDfu over the debug CDC and
+    // the firmware jumps to ROM DFU (see mp_debug_port_enter_dfu on the
+    // device side).  Skipped for every other kind so this cannot regress
+    // an RP2 or ESP32 flow.  If no running device is reachable the code
+    // falls through to promptForBootloader as before.
+    let dfuTriggered = false;
+    if (kind === "stm32-dfu" && ready.length === 0) {
+        dfuTriggered = await triggerStm32Dfu(output);
+        ready = (await detectBootloaders())
+            .filter((b) => b.kind === kind && !b.ambiguous);
+        // If the running firmware confirmed it was going to DFU but libusb
+        // still cannot see the ROM DFU device, the most likely cause on
+        // Windows is a missing WinUSB binding on 0x0483:0xDF11. Show a
+        // clear driver-install hint before falling back to the generic
+        // "waiting for a board" prompt so the user is not left wondering
+        // why the board seems to have disappeared.
+        if (ready.length === 0) {
+            await hintStm32DfuDriverIfWindows(dfuTriggered, output);
+        }
+    }
+
     if (ready.length === 0) {
         const waited = await promptForBootloader(verify, kind, entry.enterBootloader);
         if (!waited) {
@@ -639,6 +694,93 @@ async function updateFirmwareInner(
     }
     await reportDone(found, entry);
     return "flashed";
+}
+
+/**
+ * Best-effort auto-entry into STM32 ROM DFU from a running firmware.
+ *
+ * If a debug channel is reachable, connect and send Monitor_EnterDfu; the
+ * firmware ACKs, detaches USB and jumps into the ROM.  On any failure
+ * (device not present, port busy, protocol mismatch, timeout) this returns
+ * quietly and the caller falls through to promptForBootloader, which shows
+ * the board's own "Hold BOOT0 while tapping RESET" wording.
+ *
+ * Returns true when the debug command was actually delivered to the running
+ * firmware, so the caller can distinguish "we did our part, the board should
+ * be in DFU now" from "no running firmware to talk to".  On Windows this
+ * distinction gates the STM32 Bootloader driver hint below: only worth
+ * showing when we know the board really is sitting in ROM DFU.
+ */
+async function triggerStm32Dfu(output: vscode.OutputChannel): Promise<boolean> {
+    // Give the running firmware a short moment to finish enumerating if the
+    // user just plugged the board in; the caller has been running for at
+    // least the download's duration so this only matters for a cold plug.
+    const ports = await findPorts();
+    if (!ports.debug) {
+        return false;
+    }
+    const link = new DeviceLink();
+    try {
+        await link.open(ports.debug);
+        await link.enterDfu();
+        output.appendLine(`asked ${ports.debug} to enter DFU`);
+        // Ports are asynchronous under the reset; give libusb a beat to
+        // notice the ROM DFU device before the caller polls.
+        await new Promise((r) => setTimeout(r, 1500));
+        return true;
+    } catch (err) {
+        output.appendLine(`could not trigger DFU automatically: ${(err as Error).message}`);
+        return false;
+    } finally {
+        try { await link.close(); } catch { /* ignore */ }
+    }
+}
+
+/**
+ * Windows-only hint shown when the extension is confident the board is sitting
+ * in ROM DFU but libusb cannot see it.  That combination is nearly always the
+ * "STM32 Bootloader" USB device having no WinUSB driver bound -- Windows sees
+ * it in Device Manager but with an unknown-device yellow bang, and libusb's
+ * getDeviceList() returns an empty result.  Points the user at the two
+ * install paths that work today.
+ *
+ * Called with `dfuTriggered = true` so the message is only shown when the
+ * board really was told to enter DFU (running firmware ACKed the command);
+ * showing it after a cold "no board found" would misdiagnose the problem.
+ *
+ * No-op off Windows: Linux needs a udev rule the same way but our audience
+ * there is small and the error message from libusb is already clear;
+ * macOS auto-loads a WebUSB-class driver so this case does not arise.
+ */
+async function hintStm32DfuDriverIfWindows(
+    dfuTriggered: boolean,
+    output: vscode.OutputChannel,
+): Promise<void> {
+    if (!dfuTriggered || process.platform !== "win32") {
+        return;
+    }
+    output.appendLine(
+        "board was told to enter DFU but no DFU device appeared in libusb -- " +
+        "on Windows this usually means the STM32 Bootloader driver is missing");
+    const pick = await vscode.window.showErrorMessage(
+        "STM32 Bootloader driver is needed to flash this firmware",
+        {
+            modal: true,
+            detail:
+                "Windows does not recognise the STM32 ROM DFU device that the "
+                + "board is sitting in right now.  This is a one-time driver install:\n\n"
+                + "  •  Easiest: install STM32CubeProgrammer from st.com -- its installer "
+                + "bundles the STM32 Bootloader driver.\n"
+                + "  •  Lighter: run Zadig (zadig.akeo.ie), pick 'STM32 BOOTLOADER' "
+                + "in the list and choose the WinUSB driver.\n\n"
+                + "After the driver is installed the board stays in DFU mode until "
+                + "you reset it.  Come back here and click Retry.",
+        },
+        "Retry", "Open STM32CubeProgrammer download page");
+    if (pick === "Open STM32CubeProgrammer download page") {
+        await vscode.env.openExternal(vscode.Uri.parse(
+            "https://www.st.com/en/development-tools/stm32cubeprog.html"));
+    }
 }
 
 /**
@@ -696,6 +838,7 @@ async function flashFromFileInner(
             case "uf2-drive":  return { "UF2 firmware": ["uf2"] };
             case "esp-rom":    return { "ESP32 image": ["bin"] };
             case "ghi-loader": return { "SITCore firmware": ["ghi"] };
+            case "stm32-dfu":  return { "STM32 firmware": ["bin", "dfu"] };
         }
     })();
     const picked = await vscode.window.showOpenDialog({
@@ -715,7 +858,10 @@ async function flashFromFileInner(
         version: "from file",
         url: picked[0].fsPath,
         md5: md5(data),
-        address: 0,
+        // stm32-dfu images live at the AXI-mapped flash base by convention;
+        // other kinds accept 0 as-is (uf2 ignores it, esp-rom's merged images
+        // are always written at 0).
+        address: board.kind === "stm32-dfu" ? 0x08000000 : 0,
         chip: board.chip,
         resetBefore: board.resetBefore,
         enterBootloader: board.enterBootloader,
@@ -725,6 +871,19 @@ async function flashFromFileInner(
     const verify = makeVerifier(output);
     let ready = (await detectBootloaders())
         .filter((b) => b.kind === board.kind && !b.ambiguous);
+
+    // Same auto-DFU trigger as the indexed path -- see updateFirmwareInner
+    // for why this only runs for the stm32-dfu kind, and hintStm32DfuDriverIfWindows
+    // for why the driver hint is guarded on dfuTriggered.
+    if (board.kind === "stm32-dfu" && ready.length === 0) {
+        const dfuTriggered = await triggerStm32Dfu(output);
+        ready = (await detectBootloaders())
+            .filter((b) => b.kind === board.kind && !b.ambiguous);
+        if (ready.length === 0) {
+            await hintStm32DfuDriverIfWindows(dfuTriggered, output);
+        }
+    }
+
     if (ready.length === 0) {
         const waited = await promptForBootloader(verify, board.kind, board.enterBootloader);
         if (!waited) {
