@@ -255,12 +255,14 @@ export class DeviceLink extends EventEmitter {
         return this.port?.isOpen ?? false;
     }
 
-    async open(path: string): Promise<void> {
+    async open(path: string, baudRate = 115200): Promise<void> {
         await new Promise<void>((resolve, reject) => {
-            // CDC ignores the baud rate -- this is USB, not a UART -- but the
-            // API requires one.
+            // USB CDC ignores baudRate (the OS just sets a control-line
+            // request that the device firmware discards); on a real UART
+            // via bridge chip (CP2102/CH340/FTDI) the value is honored.
+            // Default 115200 matches every firmware we ship.
             const port = new (serialport().SerialPort)(
-                { path, baudRate: 115200 },
+                { path, baudRate },
                 (err: Error | null | undefined) => {
                 if (err) {
                     reject(explainOpenError(err, path));

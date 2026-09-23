@@ -32,6 +32,30 @@ interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
     sync?: boolean;
     /** Serial port of the debug channel (CDC1). Empty means auto-detect. */
     debugPort?: string;
+    /**
+     * Which interface carries the MPYDBG1 wire protocol between host and
+     * device.  Named debugInterface for symmetry with debugPort.
+     *
+     *   "usb"  (default) -- USB CDC.  Port auto-detected by VID/PID.  What
+     *                       every v0.2.1 board uses; leaving this field
+     *                       unset gives byte-for-byte-identical behavior.
+     *
+     *   "uart"           -- UART bridged through an onboard CP2102/CH340/
+     *                       FTDI to the host as a serial port.  Used by
+     *                       original ESP32 chips that lack native USB.
+     *                       Requires debugPort to be set; no auto-detect.
+     *                       Data rate is ~100x slower (115200 baud vs USB
+     *                       Full-Speed), still comfortable for interactive
+     *                       debugging.
+     */
+    debugInterface?: "usb" | "uart";
+    /**
+     * Baud rate for debugInterface: "uart".  Ignored when debugInterface is
+     * "usb".  Defaults to 115200, which matches MicroPython's stock UART
+     * REPL rate and every firmware we ship.  Only change this if you know
+     * the device has been reconfigured to a different rate.
+     */
+    debugBaud?: number;
     /** Deprecated, superseded by debugPort. Kept for existing launch.json files. */
     device?: string;
     stopOnEntry?: boolean;
@@ -144,6 +168,25 @@ export class MicroPythonDebugSession extends DebugSession {
             this.stopOnEntry = this.noDebug ? false : (args.stopOnEntry ?? false);
             this.programDir = path.dirname(args.program);
             this.entryName = path.basename(args.program);
+
+            // UART interface: the host talks to the device through a USB-to-
+            // serial bridge chip (CP2102/CH340/FTDI) rather than a native USB
+            // CDC.  No VID/PID auto-detect: the user provides debugPort
+            // explicitly, and we open the serial port at debugBaud (default
+            // 115200) directly rather than going through findPorts()'s
+            // VID/PID matching.
+            if (args.debugInterface === "uart") {
+                if (!args.debugPort) {
+                    throw new Error(
+                        "debugInterface: 'uart' requires 'debugPort' in launch.json "
+                        + "(auto-detect is disabled for UART since the port belongs "
+                        + "to the bridge chip, not the device itself).");
+                }
+                await this.launchUart(args, args.debugPort, args.debugBaud ?? 115200);
+                this.sendResponse(response);
+                this.sendEvent(new InitializedEvent());
+                return;
+            }
 
             const ports = await findPorts();
             // debugPort is the current field; args.device is kept as a fallback
@@ -438,6 +481,77 @@ export class MicroPythonDebugSession extends DebugSession {
         try {
             this.caps = await this.link.capabilities();
         } catch {
+            this.caps = undefined;
+        }
+
+        this.sessionLive = true;
+    }
+
+    /**
+     * Launch path for UART-transport boards (e.g. original ESP32 through an
+     * onboard USB-to-serial bridge).  Same feature set as the USB CDC path
+     * -- sync, breakpoints, capabilities, reboot-then-reattach -- with two
+     * differences forced by the transport:
+     *
+     *   1. No auto-detect.  The port belongs to the bridge chip, not the
+     *      device (it enumerates with the bridge's VID/PID no matter what
+     *      firmware runs on the MCU).  User supplies debugPort.
+     *
+     *   2. No wait-for-USB-reenum on reboot.  A UART bridge stays online
+     *      across MCU resets, so the OS keeps the same COM port.  We just
+     *      close the serial handle, sleep, and re-open the same path.
+     *
+     * File transfer, breakpoints, print output all travel over the same
+     * debug channel (which IS the UART); no REPL is involved.
+     */
+    private async launchUart(
+        args: LaunchArgs, port: string, baud: number,
+    ): Promise<void> {
+        this.log(`Opening UART on ${port} at ${baud} baud...`);
+        await this.link.open(port, baud);
+        this.attachEvents();
+
+        // Start from a known state.  A session that ended abruptly can leave
+        // the board halted with stale breakpoints; the next launch would
+        // then behave oddly for reasons unrelated to this run.
+        try {
+            await this.link.setBreakpoints([]);
+            await this.link.conditions(0, Cond.Stopped | Cond.Attached);
+        } catch {
+            // A device that will not answer here will fail more clearly in
+            // a moment; do not mask that with an error from the cleanup.
+        }
+
+        // Push .py files to the device via the debug channel (mpdebug's
+        // FILE_PUT / FILE_CRC commands -- CRC-based skip-unchanged makes
+        // repeat F5 fast).  Works identically to the USB path except the
+        // bytes travel over UART instead of CDC1.
+        if (args.sync !== false) {
+            await this.syncWorkspace(args.include ?? []);
+        }
+
+        // Reboot into halt so breakpoints can be set before user code runs.
+        this.log(this.noDebug
+            ? "Running without debugging -- output only, no breakpoints."
+            : "Restarting device...");
+        await this.link.reboot(RebootFlag.WaitForDebugger);
+        await this.link.close();
+
+        // On UART the bridge chip stays online -- no re-enumeration to wait
+        // for.  A short delay lets the MCU actually reset and the mpdebug
+        // engine come back up before we probe.  ~1.5 s matches the USB path
+        // and is comfortably longer than an ESP32 warm reset.
+        await delay(1500);
+        this.log(`Reopening UART on ${port}...`);
+        await this.link.open(port, baud);
+        this.attachEvents();
+        await this.link.conditions(Cond.Attached, 0);
+
+        try {
+            this.caps = await this.link.capabilities();
+        } catch {
+            // Older firmware without the query: fall back rather than fail
+            // the whole session over a diagnostic.
             this.caps = undefined;
         }
 

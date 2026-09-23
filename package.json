@@ -118,6 +118,17 @@
                 "description": "Serial port of the debug channel (CDC1). Leave empty (or omit) to auto-detect. Set explicitly when auto-detect picks the wrong port -- for example on ChromeOS, or on a machine where more than one board is plugged in.",
                 "default": ""
               },
+              "debugInterface": {
+                "type": "string",
+                "enum": ["usb", "uart"],
+                "description": "Transport carrying the debug protocol. \"usb\" (default) means the extension talks USB CDC to a board with native USB. \"uart\" means the board reaches the host through a USB-to-serial bridge chip (CP2102/CH340/FTDI) -- required for original ESP32 chips that lack native USB. Setting \"uart\" also requires debugPort to be set (no auto-detect for bridge chips).",
+                "default": "usb"
+              },
+              "debugBaud": {
+                "type": "number",
+                "description": "Baud rate for debugInterface: \"uart\". Ignored for USB CDC. Defaults to 115200, which matches MicroPython's stock UART REPL rate and every firmware we ship.",
+                "default": 115200
+              },
               "device": {
                 "type": "string",
                 "description": "Deprecated: use debugPort. Kept for backward compatibility with existing launch.json files; debugPort wins if both are set.",

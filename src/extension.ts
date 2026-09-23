@@ -272,6 +272,14 @@ const SAMPLE_LAUNCH = `{
             // Uncomment and set when auto-detect fails
             // ChromeOS, custom firmware, or more than one board on the same machine
             // "debugPort": "/dev/ttyACM1", // "COMx" on Windows
+
+            // Uncomment for boards without native USB (original ESP32 chips
+            // whose USB port is really a USB-to-serial bridge like CP2102,
+            // CH340, FTDI).  Leave unset for the vast majority of boards
+            // (Pico, ESP32-S2/S3/C3/C6, STM32C071) which use USB CDC.
+            // "debugInterface": "uart",
+            // "debugBaud": 115200,
+
             "program": "\${workspaceFolder}/main.py",
             "sync": true,
             "stopOnEntry": false,
