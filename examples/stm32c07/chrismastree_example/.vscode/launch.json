@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "micropython",
+            "request": "launch",
+            "name": "MicroPython Deploy and Debug (USB)",
+            // Uncomment and set when auto-detect fails
+            // ChromeOS, custom firmware, or more than one board on the same machine
+            "debugPort": "COM71", // "COMx" on Windows
+            "program": "${workspaceFolder}/main.py",
+            "sync": true,
+            "stopOnEntry": false,
+            // On F5, check the manifest for a newer firmware and offer to
+            // update. Set false to skip the check for this project.
+            "checkFirmwareUpdate": true
+        }
+    ]
+}
