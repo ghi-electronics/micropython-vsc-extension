@@ -4,9 +4,12 @@
 
 Set a breakpoint in the gutter. Press F5. Your code deploys, the board restarts, and
 execution stops on that line — with the call stack, your variables, and a working
-Watch window. No JTAG, no debug probe, no wiring. Works over a board's native USB
-CDC (Pico, ESP32-S2/S3, STM32C071...) or over a USB-to-serial bridge chip
-(CP2102/CH340/FTDI on original ESP32 DevKits). ▶️ [Quick tutorial on YouTube](https://www.youtube.com/watch?v=ED_czSX65UI)
+Watch window. No JTAG, no debug probe, no wiring. 
+
+- Works over a board's native USB CDC (Pico, ESP32-S2/S3, STM32C071...) 
+- Or over a USB-to-serial bridge chip (CP2102/CH340/FTDI on original ESP32 DevKits). 
+
+▶️ [Quick tutorial on YouTube](https://www.youtube.com/watch?v=ED_czSX65UI)
 
 ![MicroPython Debugger Servo](images/servo.gif)
 
@@ -43,7 +46,7 @@ on the real line, with the real values in scope.
 
 If you haven't done so, update your board firmware with MicroPython debug support. See **Supported hardware** below.
 
-### If your board has native USB with REPL (Pico, Pico 2, ESP32-S2/S3)
+### If your board has native USB (Pico, Pico 2, ESP32-S2/S3)
 
 Everything is auto-detected. No launch.json edit needed.
 
@@ -58,22 +61,6 @@ Existing project:
 1. Open the project folder in VS Code
 2. Hit **F5** and select `MicroPython`.
 3. The extension offers to save a launch configuration afterwards so F5 stops asking.
-
-### If your board is STM32C071
-
-STM32C071 has one USB CDC endpoint (no REPL), so you tell the extension which
-port to use:
-
-1. Create or open your MicroPython project (steps above).
-2. Hit **F5** so the extension saves a `.vscode/launch.json`.
-3. Open `.vscode/launch.json` and set `"debugPort"` to the COM port your board
-   enumerates as:
-
-   ```jsonc
-   "debugPort": "COM3",   // "COMx" on Windows, "/dev/ttyACM0" on Linux/macOS
-   ```
-
-4. Press **F5** — DONE.
 
 ### If your board uses UART through a USB-to-serial bridge (original ESP32, ESP32-DevKit)
 
@@ -94,6 +81,22 @@ extension which port to use, once:
    ```
 
 4. Press **F5** — the extension talks the debug protocol over the UART at 115200 baud.
+
+### If your board is STM32C071
+
+STM32C071 has one USB CDC endpoint (no REPL), so you tell the extension which
+port to use:
+
+1. Create or open your MicroPython project (steps above).
+2. Hit **F5** so the extension saves a `.vscode/launch.json`.
+3. Open `.vscode/launch.json` and set `"debugPort"` to the COM port your board
+   enumerates as:
+
+   ```jsonc
+   "debugPort": "COM3",   // "COMx" on Windows, "/dev/ttyACM0" on Linux/macOS
+   ```
+
+4. Press **F5** — DONE.
 
 ## Firmware updates
 
