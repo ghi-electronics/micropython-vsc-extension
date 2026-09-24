@@ -147,7 +147,7 @@ MicroPython debug support is compiled and tested on the boards below.
 | ESP32-S3 N16R8 Development Board | ESP32_S3_OCTAL | 16 MB flash, 8 MB Octal PSRAM. |
 | Hosyond ESP32-S3 Touchscreen Module (3.5″) | ESP32_S3_OCTAL | 16 MB flash, 8 MB Octal PSRAM; includes 3.5″ touchscreen. |
 | ESP32-PICO-DevKitM (original ESP32) | ESP32_GENERIC_UART0 | CH340-based DevKit, debug over UART0 through the bridge chip. |
-| GHI STM32C071 board | STM32C071_GENERIC_R24F128 | Single-CDC; user code lands as an `.mpy` bundle at every F5. |
+| STM32C071KBU6 | STM32C071_GENERIC_R24F128 | Single-CDC; 24KB RAM, 128KB Flash, user code lands as an `.mpy` bundle at every F5. |
 
 ### Build firmware for your own board
 
