@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "micropython",
+            "request": "launch",
+            "name": "MicroPython Deploy and Debug",
+            // The ESP32-PICO-DevKitM reaches the host through a CH340 (or
+            // CP2102 on some variants). The bridge chip is generic -- an
+            // Arduino Nano with a CH340 has the exact same VID/PID -- so
+            // the extension does not auto-pick a UART port. Set debugPort
+            // to whatever COM your DevKit shows up as.
+            "debugPort": "COM69",           // "COMx" on Windows, "/dev/ttyUSB0" on Linux/macOS
+            "debugInterface": "uart",
+            "debugBaud": 115200,
+            "program": "${workspaceFolder}/main.py",
+            "sync": true,
+            "stopOnEntry": false,
+            "checkFirmwareUpdate": true
+        }
+    ]
+}
