@@ -1,6 +1,6 @@
 # MicroPython Debugger
 
-**Real source-level debugging for MicroPython, on real hardware, over USB CDC or UART.**
+**Real source-level debugging for MicroPython, on real hardware, over USB or UART.**
 
 Set a breakpoint in the gutter. Press F5. Your code deploys, the board restarts, and
 execution stops on that line — with the call stack, your variables, and a working
@@ -46,7 +46,7 @@ on the real line, with the real values in scope.
 
 If you haven't done so, update your board firmware with MicroPython debug support. See **Supported hardware** below.
 
-### If your board has native USB (Pico, Pico 2, ESP32-S2/S3)
+### If your board has native USB (RP2040, RP2350, Pico, Pico 2, ESP32-S2/S3)
 
 Everything is auto-detected. No launch.json edit needed.
 
