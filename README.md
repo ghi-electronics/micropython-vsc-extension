@@ -1,10 +1,15 @@
 # MicroPython Debugger
 
-**Real source-level debugging for MicroPython, on real hardware, over one USB cable.**
+**Real source-level debugging for MicroPython, on real hardware, over USB CDC or UART.**
 
 Set a breakpoint in the gutter. Press F5. Your code deploys, the board restarts, and
 execution stops on that line — with the call stack, your variables, and a working
-Watch window. No JTAG, no debug probe, no wiring. ▶️ [Quick tutorial on YouTube](https://www.youtube.com/watch?v=ED_czSX65UI)
+Watch window. No JTAG, no debug probe, no wiring. 
+
+- Works over a board's native USB CDC (Pico, ESP32-S2/S3, STM32C071...) 
+- Or over a USB-to-serial bridge chip (CP2102/CH340/FTDI on original ESP32 DevKits). 
+
+▶️ [Quick tutorial on YouTube](https://www.youtube.com/watch?v=ED_czSX65UI)
 
 ![MicroPython Debugger Servo](images/servo.gif)
 
@@ -41,6 +46,10 @@ on the real line, with the real values in scope.
 
 If you haven't done so, update your board firmware with MicroPython debug support. See **Supported hardware** below.
 
+### If your board has native USB (Pico, Pico 2, ESP32-S2/S3)
+
+Everything is auto-detected. No launch.json edit needed.
+
 New project:
 
 1. Open VS Code.
@@ -52,6 +61,42 @@ Existing project:
 1. Open the project folder in VS Code
 2. Hit **F5** and select `MicroPython`.
 3. The extension offers to save a launch configuration afterwards so F5 stops asking.
+
+### If your board uses UART through a USB-to-serial bridge (original ESP32, ESP32-DevKit)
+
+Original ESP32 chips have no native USB, so the board is reached through a bridge chip
+(CP2102/CH340/CH9102/FT232). Those chips are generic — an Arduino Nano with a CH340 looks
+identical to an ESP32 DevKit with a CH340 — so auto-detect is off for UART. You tell the
+extension which port to use, once:
+
+1. Create or open your MicroPython project (steps above).
+2. Hit **F5** so the extension saves a `.vscode/launch.json`.
+3. Open `.vscode/launch.json` and uncomment three lines, filling in the COM port your
+   board shows up as (Windows: `COMx`; Linux/macOS: `/dev/ttyUSB0`):
+
+   ```jsonc
+   "debugPort": "COM3",           // "COMx" on Windows, "/dev/ttyUSB0" on Linux/macOS
+   "debugInterface": "uart",
+   "debugBaud": 115200,           // matches every firmware we ship
+   ```
+
+4. Press **F5** — the extension talks the debug protocol over the UART at 115200 baud.
+
+### If your board is STM32C071
+
+STM32C071 has one USB CDC endpoint (no REPL), so you tell the extension which
+port to use:
+
+1. Create or open your MicroPython project (steps above).
+2. Hit **F5** so the extension saves a `.vscode/launch.json`.
+3. Open `.vscode/launch.json` and set `"debugPort"` to the COM port your board
+   enumerates as:
+
+   ```jsonc
+   "debugPort": "COM3",   // "COMx" on Windows, "/dev/ttyACM0" on Linux/macOS
+   ```
+
+4. Press **F5** — DONE.
 
 ## Firmware updates
 
@@ -77,7 +122,7 @@ for a newer release and offers to install it.
 
 ## Supported hardware
 
-We ship five firmware builds — between them, they bring the debugger to most popular MicroPython boards today.
+We ship seven firmware builds — between them, they bring the debugger to most popular MicroPython boards today.
 
 | Available firmware | Note |
 |---|---|
@@ -86,6 +131,8 @@ We ship five firmware builds — between them, they bring the debugger to most p
 | [ESP32_S2_GENERIC][fw-s2] | For ESP32-S2 modules, with or without PSRAM. |
 | [ESP32_S3_GENERIC][fw-s3-generic] | For ESP32-S3 modules with no PSRAM or Quad PSRAM. Flash and PSRAM are detected automatically. |
 | [ESP32_S3_OCTAL][fw-s3-octal] | For ESP32-S3 modules with Octal PSRAM. Flash and PSRAM are detected automatically. |
+| [ESP32_GENERIC_UART0][fw-uart0] | Original ESP32 (no native USB), reached through a USB-to-serial bridge chip. Debug protocol runs over UART0 — requires `debugPort` + `debugInterface: "uart"` in launch.json. |
+| [STM32C071_GENERIC_R24F128][fw-stm32c071] | STM32C071 24 KB RAM / 128 KB flash. Single-CDC board: `.py` is compiled to `.mpy` on the host and uploaded to flash on each F5. Flash the firmware itself via USB DFU (`0x0483:0xDF11`). |
 
 Run `MicroPython: Update Device Firmware` in the Command Palette, pick the firmware for your board, and follow the instructions.
 
@@ -99,6 +146,8 @@ MicroPython debug support is compiled and tested on the boards below.
 | Seeed XIAO ESP32-S3 | ESP32_S3_GENERIC | No PSRAM on this board. |
 | ESP32-S3 N16R8 Development Board | ESP32_S3_OCTAL | 16 MB flash, 8 MB Octal PSRAM. |
 | Hosyond ESP32-S3 Touchscreen Module (3.5″) | ESP32_S3_OCTAL | 16 MB flash, 8 MB Octal PSRAM; includes 3.5″ touchscreen. |
+| ESP32-PICO-DevKitM (original ESP32) | ESP32_GENERIC_UART0 | CH340-based DevKit, debug over UART0 through the bridge chip. |
+| STM32C071KBU6 | STM32C071_GENERIC_R24F128 | Single-CDC; 24KB RAM, 128KB Flash, user code lands as an `.mpy` bundle at every F5. |
 
 ### Build firmware for your own board
 
@@ -113,6 +162,10 @@ Not in the list, or want to tune the build for your exact hardware (flash size, 
 [fw-s3-generic]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-generic-latest.bin
 
 [fw-s3-octal]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-s3-octal-latest.bin
+
+[fw-uart0]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-esp32-generic-uart0-latest.bin
+
+[fw-stm32c071]: https://raw.githubusercontent.com/ghi-electronics/micropython-vsc-extension/main/docs/firmware/micropython-stm32c071-generic-r24f128-latest.bin
 
 ## Commands
 
@@ -165,6 +218,12 @@ Data files are deployed only if you list them, since the filesystem is small:
   the handshake during the USB-JTAG reset sequence on Linux only. Install manually
   from the terminal — see the Linux section under Requirements. Windows and macOS
   flash ESP32-S3 normally through the extension.
+- **No REPL on UART boards.** UART boards (original ESP32 via CP2102/CH340/FTDI) have
+  only one serial line, and the debugger owns it. `Open Device Shell (REPL)` is
+  unavailable for these boards.
+- **No REPL on STM32C071.** The chip's 24 KB RAM / 128 KB flash budget does not fit
+  the REPL alongside the debugger. `Open Device Shell (REPL)` is unavailable for
+  STM32C071.
 
 ## Requirements
 
@@ -177,6 +236,11 @@ the extension — nothing to compile, no toolchain, no Python.
 ### Windows
 
 Fully supported.
+
+**STM32C071 firmware update.** 
+
+Windows supports DFU but doesn't always install the drivers automatically and may not prompt you to. If you're not sure, install the USB
+drivers from [win-usb-dfu.zip](https://github.com/ghi-electronics/micropython-vsc-extension/tree/main/docs/win-usb-dfu-driver/win-usb-dfu.zip).
 
 ### macOS
 

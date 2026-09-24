@@ -21,7 +21,9 @@ import { DeviceLink, findPorts, StackFrameInfo, DeviceCapabilities, DeviceVariab
 import { offerFirmwareInstall } from "./firmware/notInstalled";
 import { checkForUpdate, disableForProject } from "./firmware/updateCheck";
 import { updateFirmwareForFamily } from "./firmware/updateFirmware";
-import { Cond, RebootFlag, StepMode, StopReason, STOP_REASON_TO_DAP, Scope as DevScope } from "./protocol";
+import { BundleModule, uploadBundle, waitForDevice } from "./firmware/stm32c071Upload";
+import { compileToMpy } from "./mpyCross";
+import { Cond, KnownDevice, RebootFlag, StepMode, StopReason, STOP_REASON_TO_DAP, Scope as DevScope } from "./protocol";
 import { crc32 } from "./wireProtocol";
 import { deriveLocalNames, verifyAgainstDevice } from "./localNames";
 
@@ -30,6 +32,30 @@ interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
     sync?: boolean;
     /** Serial port of the debug channel (CDC1). Empty means auto-detect. */
     debugPort?: string;
+    /**
+     * Which interface carries the MPYDBG1 wire protocol between host and
+     * device.  Named debugInterface for symmetry with debugPort.
+     *
+     *   "usb"  (default) -- USB CDC.  Port auto-detected by VID/PID.  What
+     *                       every v0.2.1 board uses; leaving this field
+     *                       unset gives byte-for-byte-identical behavior.
+     *
+     *   "uart"           -- UART bridged through an onboard CP2102/CH340/
+     *                       FTDI to the host as a serial port.  Used by
+     *                       original ESP32 chips that lack native USB.
+     *                       Requires debugPort to be set; no auto-detect.
+     *                       Data rate is ~100x slower (115200 baud vs USB
+     *                       Full-Speed), still comfortable for interactive
+     *                       debugging.
+     */
+    debugInterface?: "usb" | "uart";
+    /**
+     * Baud rate for debugInterface: "uart".  Ignored when debugInterface is
+     * "usb".  Defaults to 115200, which matches MicroPython's stock UART
+     * REPL rate and every firmware we ship.  Only change this if you know
+     * the device has been reconfigured to a different rate.
+     */
+    debugBaud?: number;
     /** Deprecated, superseded by debugPort. Kept for existing launch.json files. */
     device?: string;
     stopOnEntry?: boolean;
@@ -143,6 +169,45 @@ export class MicroPythonDebugSession extends DebugSession {
             this.programDir = path.dirname(args.program);
             this.entryName = path.basename(args.program);
 
+            // UART interface: the host talks to the device through a USB-to-
+            // serial bridge chip (CP2102/CH340/FTDI) rather than a native USB
+            // CDC.  No VID/PID auto-detect: the user provides debugPort
+            // explicitly, and we open the serial port at debugBaud (default
+            // 115200) directly rather than going through findPorts()'s
+            // VID/PID matching.
+            if (args.debugInterface === "uart") {
+                if (!args.debugPort) {
+                    throw new Error(
+                        "debugInterface: 'uart' requires 'debugPort' in launch.json "
+                        + "(auto-detect is disabled for UART since the port belongs "
+                        + "to the bridge chip, not the device itself).");
+                }
+                // Guardrail: if the named port belongs to a known native-USB
+                // board (STM32C071 singleCdc upload flow, or any ESP32 with
+                // native USB CDC), treating it as raw UART is silently wrong
+                // -- the STM32 loader window sees the MPYDBG1 marker instead
+                // of "!MPZ" and aborts, the board reboot-loops forever.
+                // findPorts() looks up the port's VID/PID against KNOWN_DEVICES
+                // for us; if it matches, ignore the misconfigured "uart" hint
+                // and fall through to the correct native-USB path below.
+                const nativeUsb = await findPorts();
+                const overrideIsNativeUsb = nativeUsb.debug === args.debugPort
+                    || nativeUsb.repl === args.debugPort;
+                if (overrideIsNativeUsb && nativeUsb.device) {
+                    this.log(
+                        `Ignoring debugInterface: "uart" -- ${args.debugPort} `
+                        + `belongs to a native-USB board (${nativeUsb.device.name}). `
+                        + `Using USB CDC instead. Remove debugInterface/debugBaud `
+                        + `from launch.json to clear this warning.`);
+                    // Fall through to the USB CDC / singleCdc path below.
+                } else {
+                    await this.launchUart(args, args.debugPort, args.debugBaud ?? 115200);
+                    this.sendResponse(response);
+                    this.sendEvent(new InitializedEvent());
+                    return;
+                }
+            }
+
             const ports = await findPorts();
             // debugPort is the current field; args.device is kept as a fallback
             // so a launch.json written before the rename still works.
@@ -158,6 +223,17 @@ export class MicroPythonDebugSession extends DebugSession {
                 await offerFirmwareInstall();
                 this.sendResponse(response);
                 this.sendEvent(new TerminatedEvent());
+                return;
+            }
+
+            // Boards with a single CDC endpoint upload-then-debug (STM32C071)
+            // take a different path: compile locally with mpy-cross, send the
+            // .mpy over the same CDC that will carry the debug protocol,
+            // wait for the board to reset, then attach normally.
+            if (ports.device?.singleCdc) {
+                await this.launchSingleCdc(args, ports.device, devicePort);
+                this.sendResponse(response);
+                this.sendEvent(new InitializedEvent());
                 return;
             }
 
@@ -231,6 +307,275 @@ export class MicroPythonDebugSession extends DebugSession {
             this.showLostConnection();
             this.sendErrorResponse(response, 1001, (err as Error).message);
         }
+    }
+
+    /**
+     * Try to catch a single-CDC board that has already run past its upload
+     * window and get it back to the loader by way of the debug protocol.
+     *
+     * Returns true when the ping succeeded and a hard reboot was issued.
+     * Returns false when there is nothing running on the debug channel --
+     * the normal state on a first F5, when the loader itself is holding the
+     * port open waiting for MPY! bytes. Never throws: the fallback is to try
+     * the upload directly, and the timeout there produces the same error
+     * message the user would have seen anyway.
+     */
+    private async rebootLoaderIfRunning(port: string): Promise<boolean> {
+        // Small delay so the port from the just-failed uploadMpy has fully
+        // released, and so the running debugger has a chance to drain the
+        // MPY! + payload junk out of its frame decoder and resync on the
+        // next MPYDBG1 magic we're about to send.
+        await delay(300);
+
+        const probe = new DeviceLink();
+        try {
+            await probe.open(port);
+        } catch (e) {
+            this.log(`reboot-probe: failed to open ${port}: ${(e as Error).message}`);
+            return false;
+        }
+        try {
+            // First ping may be discarded while the parser is still resyncing
+            // from the garbage we just sent; give up to three attempts with
+            // 1 second each. Total worst case = 3s, still snappy for first F5
+            // when the loader is silent.
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                const answered = await Promise.race([
+                    probe.ping().catch(() => false),
+                    new Promise<boolean>((r) => setTimeout(() => r(false), 1000)),
+                ]);
+                if (answered) {
+                    this.log(`reboot-probe: debug engine answered on attempt ${attempt}`);
+                    // The reboot() helper flushes and gives the device its ~50 ms
+                    // detach window. Any close error from that point is expected --
+                    // the board is on its way to a hard reset.
+                    try {
+                        await probe.reboot(RebootFlag.Hard);
+                        this.log(`reboot-probe: hard-reset command sent`);
+                    } catch (e) {
+                        this.log(`reboot-probe: reboot command threw (expected as the board resets): ${(e as Error).message}`);
+                    }
+                    return true;
+                }
+            }
+            this.log(`reboot-probe: no answer after 3 attempts (3 s total)`);
+            return false;
+        } finally {
+            await probe.close().catch(() => { /* already gone */ });
+        }
+    }
+
+    /**
+     * Launch path for single-CDC upload-then-debug boards (STM32C071).
+     *
+     * Distinct from the main launchRequest body in three ways:
+     *   1. No filesystem sync: the board has no filesystem. Only main.py is
+     *      compiled and uploaded as bytecode.
+     *   2. No firmware-update REPL query: there is no REPL to interrogate.
+     *   3. No RebootFlag.WaitForDebugger reboot round-trip: the board resets
+     *      itself as a side effect of the upload and comes back running the
+     *      new .mpy. stopOnEntry is not supported here -- the firmware's
+     *      halt-at-entry hooks are disabled in this build -- so a request
+     *      for it is logged and downgraded.
+     */
+    private async launchSingleCdc(
+        args: LaunchArgs,
+        device: KnownDevice,
+        initialPort: string,
+    ): Promise<void> {
+        if (!args.program) {
+            throw new Error("No program specified for the debug session.");
+        }
+        if (!args.program.toLowerCase().endsWith(".py")) {
+            throw new Error(
+                `${device.name} only accepts a .py entry script -- got ${args.program}. `
+                + `Point 'program' at the source file, not a precompiled artifact.`);
+        }
+        // The firmware stores exactly one .mpy blob; the workspace's main.py
+        // is the entry point, and any modules it imports would have to be
+        // rolled into it manually. 'sync' is silently ignored -- the launch
+        // template defaults it to true, so warning would fire on every F5.
+        if (this.stopOnEntry) {
+            this.log(`[${device.name}] stopOnEntry is not supported on this board -- `
+                + `firmware halt-at-entry hooks are disabled. Set a breakpoint on the first line instead.`);
+            this.stopOnEntry = false;
+        }
+
+        // 1. Compile every .py in the project directory, not just the entry.
+        //    The entry file is packed under the fixed module name "main";
+        //    everything else is packed under its stem (e.g. ssd1306.py ->
+        //    "ssd1306") so user code can `import ssd1306` and the on-device
+        //    importer will find it.  Nested subdirectories are ignored --
+        //    this board's import surface is intentionally flat.
+        const programDir = path.dirname(args.program);
+        const entryBase = path.basename(args.program).toLowerCase();
+        const pyFiles = fs.readdirSync(programDir)
+            .filter((f) => f.toLowerCase().endsWith(".py"))
+            .map((f) => path.join(programDir, f));
+        this.log(`Compiling ${pyFiles.length} .py file(s) with mpy-cross (${device.mpyArch})...`);
+        const modules: BundleModule[] = [];
+        for (const p of pyFiles) {
+            const compiled = await compileToMpy(
+                this.context, p, device.mpyArch ?? "armv6m",
+                (s) => this.output.appendLine(s));
+            const isEntry = path.basename(p).toLowerCase() === entryBase;
+            const name = isEntry ? "main" : path.basename(p, path.extname(p));
+            modules.push({ name, mpy: compiled.mpy });
+            this.log(`  ${isEntry ? "* " : "  "}${name}: ${compiled.mpy.length} bytes (${path.basename(p)})`);
+        }
+        if (!modules.some((m) => m.name === "main")) {
+            throw new Error(
+                `${device.name}: the entry program ${args.program} was not found among the compiled .py files. `
+                + `Make sure it lives in the project folder.`);
+        }
+
+        // 2. Upload over the CDC. The firmware answers ACK/LEN OK/OK, then
+        //    calls NVIC_SystemReset() and disappears from the bus.
+        //
+        //    On the second F5 in a session the board is past its 3 s upload
+        //    window and sitting in either the debug engine or __WFI(); the
+        //    upload attempt will time out. Recover by pinging the debug
+        //    protocol -- if it answers, ask for a hard reset so the loader
+        //    window reopens -- then retry the upload once. We cannot probe
+        //    up front, because probing on the *first* F5 would feed the
+        //    loader four non-magic bytes and make it fall through into the
+        //    execute path instead of accepting the upload.
+        this.log(`Uploading bundle to ${initialPort}...`);
+        let uploadPort = initialPort;
+        try {
+            await uploadBundle(uploadPort, modules, device,
+                (s) => this.output.appendLine(s));
+        } catch (err) {
+            const msg = (err as Error).message;
+            const timedOut = /no acknowledgement/i.test(msg);
+            if (!timedOut) {
+                throw err;
+            }
+            this.log("No answer from the loader; the board may be running the previous bundle. "
+                + "Asking the debug engine for a hard reset...");
+            if (!await this.rebootLoaderIfRunning(uploadPort)) {
+                throw new Error(
+                    `${device.name}: the loader did not answer, and the debug engine did `
+                    + `not answer either. Press RESET on the board and try F5 again.`);
+            }
+            // Give USB a moment to detach after the hard-reset before we start
+            // polling for it to reappear. 400 ms is enough for the CDC to
+            // drop; the firmware then re-enumerates and opens its 3 s upload
+            // window, so waitForDevice's 100 ms polling catches it quickly.
+            await delay(400);
+            uploadPort = await waitForDevice(device, 15_000, 100);
+            this.log(`Retrying upload on ${uploadPort}...`);
+            // Small settle so the loader has time to send its greeting and
+            // reach its cdc_read_exact for the magic; without this a fast
+            // Windows re-enum can beat the firmware to the read.
+            await delay(200);
+            await uploadBundle(uploadPort, modules, device,
+                (s) => this.output.appendLine(s));
+        }
+        this.log("Upload accepted; waiting for the board to reset...");
+
+        // 3. Wait for USB re-enumeration. Windows tends to reuse the same COM
+        //    number, but the finder matches VID/PID rather than depending on that.
+        await delay(1500);
+        const reconnectPort = await waitForDevice(device);
+        this.log(`Reconnected on ${reconnectPort}.`);
+
+        // 4. Open the debug channel on the (re-enumerated) port and take
+        //    over. From here on everything looks like a standard debug attach.
+        await this.link.open(reconnectPort);
+        this.attachEvents();
+
+        try {
+            await this.link.setBreakpoints([]);
+            this.log("attach: setBreakpoints ok");
+        } catch (e) {
+            this.log(`attach: setBreakpoints threw: ${(e as Error).message}`);
+        }
+        try {
+            await this.link.conditions(Cond.Attached, Cond.Stopped);
+            this.log("attach: Cond.Attached set");
+        } catch (e) {
+            this.log(`attach: conditions threw: ${(e as Error).message}`);
+        }
+
+        try {
+            this.caps = await this.link.capabilities();
+        } catch {
+            this.caps = undefined;
+        }
+
+        this.sessionLive = true;
+    }
+
+    /**
+     * Launch path for UART-transport boards (e.g. original ESP32 through an
+     * onboard USB-to-serial bridge).  Same feature set as the USB CDC path
+     * -- sync, breakpoints, capabilities, reboot-then-reattach -- with two
+     * differences forced by the transport:
+     *
+     *   1. No auto-detect.  The port belongs to the bridge chip, not the
+     *      device (it enumerates with the bridge's VID/PID no matter what
+     *      firmware runs on the MCU).  User supplies debugPort.
+     *
+     *   2. No wait-for-USB-reenum on reboot.  A UART bridge stays online
+     *      across MCU resets, so the OS keeps the same COM port.  We just
+     *      close the serial handle, sleep, and re-open the same path.
+     *
+     * File transfer, breakpoints, print output all travel over the same
+     * debug channel (which IS the UART); no REPL is involved.
+     */
+    private async launchUart(
+        args: LaunchArgs, port: string, baud: number,
+    ): Promise<void> {
+        this.log(`Opening UART on ${port} at ${baud} baud...`);
+        await this.link.open(port, baud);
+        this.attachEvents();
+
+        // Start from a known state.  A session that ended abruptly can leave
+        // the board halted with stale breakpoints; the next launch would
+        // then behave oddly for reasons unrelated to this run.
+        try {
+            await this.link.setBreakpoints([]);
+            await this.link.conditions(0, Cond.Stopped | Cond.Attached);
+        } catch {
+            // A device that will not answer here will fail more clearly in
+            // a moment; do not mask that with an error from the cleanup.
+        }
+
+        // Push .py files to the device via the debug channel (mpdebug's
+        // FILE_PUT / FILE_CRC commands -- CRC-based skip-unchanged makes
+        // repeat F5 fast).  Works identically to the USB path except the
+        // bytes travel over UART instead of CDC1.
+        if (args.sync !== false) {
+            await this.syncWorkspace(args.include ?? []);
+        }
+
+        // Reboot into halt so breakpoints can be set before user code runs.
+        this.log(this.noDebug
+            ? "Running without debugging -- output only, no breakpoints."
+            : "Restarting device...");
+        await this.link.reboot(RebootFlag.WaitForDebugger);
+        await this.link.close();
+
+        // On UART the bridge chip stays online -- no re-enumeration to wait
+        // for.  A short delay lets the MCU actually reset and the mpdebug
+        // engine come back up before we probe.  ~1.5 s matches the USB path
+        // and is comfortably longer than an ESP32 warm reset.
+        await delay(1500);
+        this.log(`Reopening UART on ${port}...`);
+        await this.link.open(port, baud);
+        this.attachEvents();
+        await this.link.conditions(Cond.Attached, 0);
+
+        try {
+            this.caps = await this.link.capabilities();
+        } catch {
+            // Older firmware without the query: fall back rather than fail
+            // the whole session over a diagnostic.
+            this.caps = undefined;
+        }
+
+        this.sessionLive = true;
     }
 
     /**
@@ -907,23 +1252,35 @@ export class MicroPythonDebugSession extends DebugSession {
         const frame = args.frameId ?? 0;
         const expr = args.expression.trim();
 
-        // Bare-identifier shortcut. The device's evaluator compiles the
-        // expression against the frame's module globals only, so a hover on a
-        // function argument or a non-argument local would return NameError.
-        // For a lone name we can answer without compiling: look it up in the
-        // frame's Locals (which the host already knows how to fetch and name),
-        // and fall through to the device only if it is not a local -- in which
-        // case it is a global and the device evaluator handles it correctly.
+        // Bare-identifier shortcut.  The device's evaluator compiles the
+        // expression, which on compiler-less boards (e.g. STM32C071 with
+        // MICROPY_ENABLE_COMPILER=0) always fails -- so hover on any name
+        // would silently show nothing.  Answer the common case here without
+        // compiling: look the identifier up in the frame's Locals, then in
+        // Globals, and only fall through to the device evaluator (for
+        // real expressions) if it is neither.
         //
-        // The shortcut is limited to plain identifiers on purpose. Expressions
-        // like `a + b` where `a` or `b` is a local still hit the underlying
-        // limitation; fixing that needs the eval scope to carry locals, which
-        // is a wire-protocol change.
+        // The shortcut is limited to plain identifiers on purpose.
+        // Expressions like `a + b` still hit the compiler on the device; on
+        // boards without a compiler those will fail, and that's a wire-
+        // protocol change to fix (evaluator would need to carry a value
+        // rather than a string).
         if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(expr)) {
             try {
                 const slots = await this.link.variables(frame, DevScope.Locals);
                 const named = this.nameLocals(frame, slots);
                 const hit = named.find((v) => v.name === expr);
+                if (hit) {
+                    response.body = { result: hit.value, variablesReference: hit.handle };
+                    this.sendResponse(response);
+                    return;
+                }
+            } catch {
+                // Fall through to Globals lookup, then the device evaluator.
+            }
+            try {
+                const globals = await this.link.variables(frame, DevScope.Globals);
+                const hit = globals.find((v) => v.name === expr);
                 if (hit) {
                     response.body = { result: hit.value, variablesReference: hit.handle };
                     this.sendResponse(response);

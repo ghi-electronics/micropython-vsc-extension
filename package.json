@@ -1,8 +1,8 @@
 {
   "name": "micropython-debugger",
   "displayName": "MicroPython Debugger",
-  "version": "0.2.1",
-  "description": "Source-level MicroPython debugging over USB.",
+  "version": "0.2.2",
+  "description": "Source-level MicroPython debugging over USB or UART.",
   "publisher": "ghielectronics",
   "license": "MIT",
   "homepage": "https://www.ghielectronics.com",
@@ -118,6 +118,17 @@
                 "description": "Serial port of the debug channel (CDC1). Leave empty (or omit) to auto-detect. Set explicitly when auto-detect picks the wrong port -- for example on ChromeOS, or on a machine where more than one board is plugged in.",
                 "default": ""
               },
+              "debugInterface": {
+                "type": "string",
+                "enum": ["usb", "uart"],
+                "description": "Transport carrying the debug protocol. \"usb\" (default) means the extension talks USB CDC to a board with native USB. \"uart\" means the board reaches the host through a USB-to-serial bridge chip (CP2102/CH340/FTDI) -- required for original ESP32 chips that lack native USB. Setting \"uart\" also requires debugPort to be set (no auto-detect for bridge chips).",
+                "default": "usb"
+              },
+              "debugBaud": {
+                "type": "number",
+                "description": "Baud rate for debugInterface: \"uart\". Ignored for USB CDC. Defaults to 115200, which matches MicroPython's stock UART REPL rate and every firmware we ship.",
+                "default": 115200
+              },
               "device": {
                 "type": "string",
                 "description": "Deprecated: use debugPort. Kept for backward compatibility with existing launch.json files; debugPort wins if both are set.",
@@ -149,7 +160,7 @@
           {
             "type": "micropython",
             "request": "launch",
-            "name": "MicroPython Deploy and Debug (USB)",
+            "name": "MicroPython Deploy and Debug",
             "program": "${workspaceFolder}/main.py",
             "sync": true,
             "stopOnEntry": false,
@@ -158,12 +169,12 @@
         ],
         "configurationSnippets": [
           {
-            "label": "MicroPython: Deploy and Debug over USB",
+            "label": "MicroPython: Deploy and Debug",
             "description": "Deploy the workspace to the device and debug it.",
             "body": {
               "type": "micropython",
               "request": "launch",
-              "name": "MicroPython Deploy and Debug (USB)",
+              "name": "MicroPython Deploy and Debug",
               "program": "^\"\\${workspaceFolder}/main.py\"",
               "sync": true,
               "stopOnEntry": false,
@@ -183,7 +194,8 @@
     "@vscode/debugadapter": "^1.65.0",
     "@vscode/debugprotocol": "^1.65.0",
     "esptool-js": "^0.6.1",
-    "serialport": "^12.0.0"
+    "serialport": "^12.0.0",
+    "usb": "^2.14.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
@@ -211,6 +223,7 @@
     "firmware",
     "ghi electronics",
     "stm32",
+    "stm32c071",
     "esp32",
     "esp32-s2",
     "esp32-s3",

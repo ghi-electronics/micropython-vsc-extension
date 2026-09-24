@@ -65,11 +65,21 @@ export interface FirmwareFamily {
      * How the board is recognised while in its bootloader.
      *
      * `boardId` is the `Board-ID:` line of INFO_UF2.TXT for a UF2 drive;
-     * `usb` is the ROM loader's VID/PID for a serial bootloader.  Carrying
-     * these in the index (rather than only in boards.ts) means a new board can
-     * be published without shipping a new extension.
+     * `usb` is the ROM loader's VID/PID for a serial bootloader (single
+     * identity, or a list when several USB-to-serial bridge chips are all
+     * valid, as on original ESP32 boards).  `running` and `dfu` cover boards
+     * that flip between two USB identities -- a running-firmware VID/PID and
+     * a distinct ROM-loader VID/PID -- as STM32C071 does when the extension
+     * asks it to enter DFU (0x1B9F:0xF302 -> 0x0483:0xDF11).  Carrying these
+     * in the index (rather than only in boards.ts) means a new board can be
+     * published without shipping a new extension.
      */
-    bootloader?: { boardId?: string; usb?: UsbId };
+    bootloader?: {
+        boardId?: string;
+        usb?: UsbId | UsbId[];
+        running?: UsbId;
+        dfu?: UsbId;
+    };
     version: string;
     /**
      * "N/A" for a board that is announced but has no firmware yet.
@@ -108,12 +118,14 @@ export interface FirmwareFamily {
      */
     enterBootloader?: string;
     /**
-     * Flash offset for "esp-rom" firmware.  A merged image (bootloader +
-     * partition table + application, combined at build time by
-     * `esptool --merge-bin`) is written at 0, which is why the extension never
-     * has to know the individual offsets.  Defaults to 0.
+     * Flash offset for the image.  ESP-ROM merged images are written at 0
+     * (bootloader + partitions + app combined at build time by
+     * `esptool --merge-bin`); STM32 DFU images name the AXI-mapped flash base
+     * ("0x08000000") because DFU_DNLOAD is address-agnostic and needs to be
+     * pointed at the destination.  Accepted as either a number or a hex
+     * string in the JSON so the STM32 entries stay readable.  Defaults to 0.
      */
-    address?: number;
+    address?: number | string;
 }
 
 export interface Manifest {
@@ -216,6 +228,18 @@ export function parseHexId(s: string | undefined): number | undefined {
     }
     const n = parseInt(s.replace(/^0x/i, ""), 16);
     return Number.isFinite(n) ? n : undefined;
+}
+
+/** Resolve the flash address of an entry to a number (see `address` above). */
+export function familyAddress(family: { address?: number | string }): number {
+    const a = family.address;
+    if (typeof a === "number") {
+        return a;
+    }
+    if (typeof a === "string") {
+        return parseHexId(a) ?? 0;
+    }
+    return 0;
 }
 
 /**

@@ -23,7 +23,15 @@ export type FlashKind =
     /** Espressif ROM loader over a serial port (esptool protocol). */
     | "esp-rom"
     /** GHI SITCore BL2 bootloader over a CDC serial port (XMODEM-1K). */
-    | "ghi-loader";
+    | "ghi-loader"
+    /**
+     * STM32 ROM DFU bootloader over USB (DfuSe, DFU 1.1 with ST extensions).
+     * Not a serial port and not a mass-storage drive: it enumerates as a
+     * USB class-DFU device (0x0483:0xDF11) and speaks class-specific control
+     * transfers (DFU_DNLOAD / DFU_GETSTATUS / erase / program). Detected via
+     * libusb rather than through the serialport list.
+     */
+    | "stm32-dfu";
 
 export interface BootBoard {
     /** Stable id, matches the `id` field in the firmware manifest. */
@@ -88,17 +96,36 @@ export const UF2_FAMILIES: { boardId: string; label: string; boards: BootBoard[]
  * The ESP32-S2/S3 ROM loader enumerates as a CDC device with Espressif's VID
  * and a PID fixed in ROM -- 0x0002 on the S2.  Note this is a different PID
  * from the running firmware (0x4002), so the two states never collide.
+ *
+ * Original ESP32 (no native USB) reaches the host through a USB-to-serial
+ * bridge chip -- CP2102, CH340, CH9102 or FT232 -- soldered on the board.
+ * The bridge is generic: an Arduino Nano with a CH340 has the exact same
+ * VID/PID as an ESP32 DevKit with a CH340. So those entries are marked
+ * ambiguous: the verifier in updateFirmware.ts runs esptool against the
+ * port, which only answers on a real ESP32 in its ROM loader. That keeps
+ * the auto-detect path working for Update Firmware while ruling out
+ * false-positives from other USB-serial devices on the same machine.
  */
+const ESP32_UART_BOARD: BootBoard = {
+    id: "ESP32_GENERIC_UART0",
+    deviceSupport: "ESP32 Generic UART0 (no USB)",
+    kind: "esp-rom",
+    chip: "ESP32",
+};
 export const SERIAL_BOOTLOADERS: {
     vid: number; pid: number; board: BootBoard;
     /**
      * True when this identity does not by itself mean "in the bootloader".
      *
-     * The XIAO ESP32-S3 presents the same VID, PID and serial number whether it
-     * is running or sitting in its ROM loader, because both use the chip's
-     * USB Serial/JTAG unit.  Measured on the board, not assumed.  Such a device
-     * has to be asked -- the ROM answers esptool and a running application does
-     * not -- before the user is told a board is ready to flash.
+     * Two cases today:
+     *   - The XIAO ESP32-S3 presents the same VID, PID and serial number whether
+     *     it is running or sitting in its ROM loader, because both use the chip's
+     *     USB Serial/JTAG unit.  Measured on the board, not assumed.
+     *   - USB-to-serial bridge chips (CP2102/CH340/CH9102/FT232) are used by
+     *     countless devices, not just ESP32 DevKits.
+     * Either way the identity has to be probed -- the ROM answers esptool and
+     * neither a running application nor a random Arduino does -- before the user
+     * is told a board is ready to flash.
      */
     ambiguous?: boolean;
 }[] = [
@@ -124,6 +151,15 @@ export const SERIAL_BOOTLOADERS: {
         },
         ambiguous: true,
     },
+    // Original ESP32 reaching the host through a USB-to-serial bridge.  Every
+    // entry points at the same board and is marked ambiguous so the esptool
+    // probe decides whether the port is really an ESP32.  DTR/RTS on the bridge
+    // is what drives the chip into its ROM loader, so the user never has to
+    // press BOOT+RESET -- esptool does it automatically before the sync.
+    { vid: 0x10c4, pid: 0xea60, board: ESP32_UART_BOARD, ambiguous: true },  // CP2102
+    { vid: 0x1a86, pid: 0x7523, board: ESP32_UART_BOARD, ambiguous: true },  // CH340
+    { vid: 0x1a86, pid: 0x55d4, board: ESP32_UART_BOARD, ambiguous: true },  // CH9102
+    { vid: 0x0403, pid: 0x6001, board: ESP32_UART_BOARD, ambiguous: true },  // FT232
 ];
 
 /**
@@ -190,6 +226,27 @@ export function manualFlashChoices(): BootBoard[] {
             chip: "ESP32-S3",
             resetBefore: "usb_reset",
             enterBootloader: "Hold BOOT, tap RESET, then release BOOT.",
+        },
+        {
+            // Original ESP32 (no native USB) via USB-to-serial bridge.
+            // Enter bootloader by holding BOOT while replugging: many DevKit
+            // variants have no RESET pin exposed (only BOOT + EN), and even
+            // where the wiring is standard, the auto-reset path (DTR/RTS via
+            // esptool) does not work when the running firmware or user code
+            // has crashed. Replugging always works.
+            id: "ESP32_GENERIC_UART0",
+            deviceSupport: "ESP32 Generic UART0 (no USB)",
+            kind: "esp-rom",
+            chip: "ESP32",
+            enterBootloader:
+                "Hold BOOT, then disconnect and reconnect the USB cable to enter bootloader mode.",
+        },
+        {
+            id: "STM32C071_GENERIC_R24F128",
+            deviceSupport: "DUELink, STM32C071 24KB RAM 128KB FLASH",
+            kind: "stm32-dfu",
+            chip: "STM32C071RB",
+            enterBootloader: "Hold BOOT0 high while tapping RESET.",
         },
     ];
 }

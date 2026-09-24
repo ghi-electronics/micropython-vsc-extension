@@ -147,6 +147,50 @@ BOARDS = [
         "esp_build": "ports/esp32/build-GHI_ESP32_S3_OCTAL",
         "publish": "micropython-esp32-s3-octal-v{version}.bin",
     },
+    {
+        # Original ESP32 (no native USB) reaching the host through a USB-to-
+        # serial bridge chip -- CP2102, CH340, FT232 -- soldered on the dev
+        # board.  Debug transport is UART0 instead of USB CDC because the
+        # ESP32 does not have a native-USB peripheral.  Several bridge chips
+        # are listed so any DevKit-style board matches, not just one vendor.
+        "id": "ESP32_GENERIC_UART0",
+        "device_support": "ESP32 Generic UART0 (no USB)",
+        "kind": "esp-rom",
+        "bootloader": {"usb": [
+            {"vid": "0x10C4", "pid": "0xEA60", "chip": "CP2102"},
+            {"vid": "0x1A86", "pid": "0x7523", "chip": "CH340"},
+            {"vid": "0x1A86", "pid": "0x55D4", "chip": "CH9102"},
+            {"vid": "0x0403", "pid": "0x6001", "chip": "FT232"},
+        ]},
+        "enterBootloader": "Hold BOOT, then disconnect and reconnect the USB cable "
+                           "to enter bootloader mode.",
+        "chip": "ESP32",
+        "address": 0,
+        "update_fw_id": "GHIMPDG008",
+        "esp_build": "ports/esp32/build-GHI_ESP32_GENERIC_UART0",
+        "publish": "micropython-esp32-generic-uart0-v{version}.bin",
+    },
+    {
+        # STM32C071 128 KB flash / 24 KB RAM.  Flashed via ST's ROM DFU
+        # bootloader (VID/PID 0x0483:0xDF11 in bootloader mode); running
+        # firmware advertises 0x1B9F:0xF302 -- GHI VID and a debug-channel
+        # PID that slots after DueLink (0xF300) and Microblock (0xF301) in
+        # GHI's PID space.  See DebuggerExtension/.../stm32Dfu.ts for the
+        # host side of DFU 1.1 + DfuSe.
+        "id": "STM32C071_GENERIC_R24F128",
+        "device_support": "DUELink, STM32C071 24KB RAM 128KB FLASH",
+        "kind": "stm32-dfu",
+        "bootloader": {
+            "running": {"vid": "0x1B9F", "pid": "0xF302"},
+            "dfu":     {"vid": "0x0483", "pid": "0xDF11"},
+        },
+        "enterBootloader": "Hold BOOT0 high while tapping RESET.",
+        "chip": "STM32C071RB",
+        "address": "0x08000000",
+        "update_fw_id": "GHIMPDG009",
+        "artifact": "ports/stm32/build-GHI_STM32C071/firmware.bin",
+        "publish": "micropython-stm32c071-generic-r24f128-v{version}.bin",
+    },
 ]
 
 
