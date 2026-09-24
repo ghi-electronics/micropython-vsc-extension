@@ -132,7 +132,7 @@ We ship seven firmware builds — between them, they bring the debugger to most 
 | [ESP32_S3_GENERIC][fw-s3-generic] | For ESP32-S3 modules with no PSRAM or Quad PSRAM. Flash and PSRAM are detected automatically. |
 | [ESP32_S3_OCTAL][fw-s3-octal] | For ESP32-S3 modules with Octal PSRAM. Flash and PSRAM are detected automatically. |
 | [ESP32_GENERIC_UART0][fw-uart0] | Original ESP32 (no native USB), reached through a USB-to-serial bridge chip. Debug protocol runs over UART0 — requires `debugPort` + `debugInterface: "uart"` in launch.json. |
-| [STM32C071_GENERIC_R24F128][fw-stm32c071] | STM32C071 24 KB RAM / 128 KB flash. Single-CDC board: `.py` is compiled to `.mpy` on the host and uploaded to flash on each F5. Flash the firmware itself via USB DFU (`0x0483:0xDF11`). |
+| [STM32C071_GENERIC_R24F128][fw-stm32c071] | STM32C071 24 KB RAM / 128 KB flash. Single-CDC board: `.py` is compiled to `.mpy` on the host and uploaded to flash on each F5. Flash the firmware itself via USB DFU. |
 
 Run `MicroPython: Update Device Firmware` in the Command Palette, pick the firmware for your board, and follow the instructions.
 
@@ -244,9 +244,12 @@ drivers from [win-usb-dfu.zip](https://github.com/ghi-electronics/micropython-vs
 
 ### macOS
 
-Fully supported.
+Fully supported, except: STM32C071 F5 needs `mpy-cross` on the machine. Install once with `pip install mpy-cross`.
 
 ### Linux
+
+STM32C071 F5 needs `mpy-cross` on the machine. Install once with `pip install mpy-cross`.
+
 
 Install the udev rule once, then replug the board.
 
