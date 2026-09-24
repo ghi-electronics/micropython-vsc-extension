@@ -237,8 +237,9 @@ the extension — nothing to compile, no toolchain, no Python.
 
 Fully supported.
 
-**STM32C071 firmware update.** Windows supports DFU but doesn't always install the
-drivers automatically and may not prompt you to. If you're not sure, install the USB
+**STM32C071 firmware update.** 
+
+Windows supports DFU but doesn't always install the drivers automatically and may not prompt you to. If you're not sure, install the USB
 drivers from [win-usb-dfu.zip](https://github.com/ghi-electronics/micropython-vsc-extension/tree/main/docs/win-usb-dfu-driver/win-usb-dfu.zip).
 
 ### macOS
